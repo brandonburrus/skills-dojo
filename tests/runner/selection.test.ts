@@ -151,12 +151,12 @@ describe('runSelectionEvals', () => {
 
     expect(onProgress).toHaveBeenCalledTimes(2)
     expect(onProgress).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'start', evalIndex: 0 }),
+      expect.objectContaining({ status: 'start', runIndex: 0 }),
     )
     expect(onProgress).toHaveBeenCalledWith(
       expect.objectContaining({
         status: 'complete',
-        evalIndex: 0,
+        runIndex: 0,
         result: expect.objectContaining({ passed: true }),
       }),
     )
@@ -176,5 +176,157 @@ describe('runSelectionEvals', () => {
     })
 
     expect(results).toHaveLength(0)
+  })
+})
+
+describe('runSelectionEvals variants', () => {
+  it('runs only base when no variants configured', async () => {
+    const eval_ = makeEval({ selection: { expect: 'skill-a', available: 'all' } })
+    const results = await runSelectionEvals({
+      evaluator: mockEvaluator({ loaded: true, skillName: 'skill-a', raw: '' }),
+      skills: allSkills,
+      evals: [makeDiscovered(eval_)],
+    })
+    expect(results).toHaveLength(1)
+    expect(results[0].variant).toBeUndefined()
+  })
+
+  it('runs base + skill-level variants when skillVariants provided', async () => {
+    const eval_ = makeEval({ selection: { expect: 'skill-a', available: 'all' } })
+    const discovered = makeDiscovered(eval_)
+    discovered.skillName = 'skill-a'
+
+    const skillVariants = new Map([
+      ['skill-a', [{ name: 'concise', description: 'Short desc', enabled: true }]],
+    ])
+
+    const results = await runSelectionEvals({
+      evaluator: mockEvaluator({ loaded: true, skillName: 'skill-a', raw: '' }),
+      skills: allSkills,
+      evals: [discovered],
+      skillVariants,
+    })
+    expect(results).toHaveLength(2)
+    expect(results[0].variant).toBeUndefined()
+    expect(results[1].variant).toBe('concise')
+  })
+
+  it('runs base + inline variants from eval', async () => {
+    const eval_ = makeEval({
+      selection: { expect: 'skill-a', available: 'all' },
+      variants: [{ name: 'verbose', description: 'Long desc', enabled: true }],
+    })
+    const results = await runSelectionEvals({
+      evaluator: mockEvaluator({ loaded: true, skillName: 'skill-a', raw: '' }),
+      skills: allSkills,
+      evals: [makeDiscovered(eval_)],
+    })
+    expect(results).toHaveLength(2)
+    expect(results[1].variant).toBe('verbose')
+  })
+
+  it('respects config.variants: disabled (only base)', async () => {
+    const eval_ = makeEval({
+      selection: { expect: 'skill-a', available: 'all' },
+      variants: [{ name: 'verbose', description: 'Long desc', enabled: true }],
+      config: { variants: 'disabled' },
+    })
+    const discovered = makeDiscovered(eval_)
+    discovered.skillName = 'skill-a'
+
+    const skillVariants = new Map([
+      ['skill-a', [{ name: 'concise', description: 'Short', enabled: true }]],
+    ])
+
+    const results = await runSelectionEvals({
+      evaluator: mockEvaluator({ loaded: true, skillName: 'skill-a', raw: '' }),
+      skills: allSkills,
+      evals: [discovered],
+      skillVariants,
+    })
+    expect(results).toHaveLength(1)
+    expect(results[0].variant).toBeUndefined()
+  })
+
+  it('respects config.variants: inline-only (no skill-level)', async () => {
+    const eval_ = makeEval({
+      selection: { expect: 'skill-a', available: 'all' },
+      variants: [{ name: 'inline-v', description: 'Inline variant', enabled: true }],
+      config: { variants: 'inline-only' },
+    })
+    const discovered = makeDiscovered(eval_)
+    discovered.skillName = 'skill-a'
+
+    const skillVariants = new Map([
+      ['skill-a', [{ name: 'skill-v', description: 'Skill variant', enabled: true }]],
+    ])
+
+    const results = await runSelectionEvals({
+      evaluator: mockEvaluator({ loaded: true, skillName: 'skill-a', raw: '' }),
+      skills: allSkills,
+      evals: [discovered],
+      skillVariants,
+    })
+    expect(results).toHaveLength(2)
+    expect(results[0].variant).toBeUndefined()
+    expect(results[1].variant).toBe('inline-v')
+  })
+
+  it('skips variants for expect: none', async () => {
+    const eval_ = makeEval({
+      selection: { expect: 'none', available: 'all' },
+      variants: [{ name: 'v1', description: 'Variant', enabled: true }],
+    })
+    const results = await runSelectionEvals({
+      evaluator: mockEvaluator({ loaded: false, skillName: null, raw: '' }),
+      skills: allSkills,
+      evals: [makeDiscovered(eval_)],
+    })
+    expect(results).toHaveLength(1)
+    expect(results[0].variant).toBeUndefined()
+  })
+
+  it('skips variants for expect: any', async () => {
+    const eval_ = makeEval({
+      selection: { expect: 'any', available: 'all' },
+      variants: [{ name: 'v1', description: 'Variant', enabled: true }],
+    })
+    const results = await runSelectionEvals({
+      evaluator: mockEvaluator({ loaded: true, skillName: 'skill-a', raw: '' }),
+      skills: allSkills,
+      evals: [makeDiscovered(eval_)],
+    })
+    expect(results).toHaveLength(1)
+  })
+
+  it('only runs enabled variants (enabled: false are skipped)', async () => {
+    const eval_ = makeEval({
+      selection: { expect: 'skill-a', available: 'all' },
+      variants: [
+        { name: 'enabled-v', description: 'Active', enabled: true },
+        { name: 'disabled-v', description: 'Inactive', enabled: false },
+      ],
+    })
+    const results = await runSelectionEvals({
+      evaluator: mockEvaluator({ loaded: true, skillName: 'skill-a', raw: '' }),
+      skills: allSkills,
+      evals: [makeDiscovered(eval_)],
+    })
+    expect(results).toHaveLength(2)
+    expect(results[1].variant).toBe('enabled-v')
+  })
+
+  it('result includes variant name for variant runs, undefined for base', async () => {
+    const eval_ = makeEval({
+      selection: { expect: 'skill-a', available: 'all' },
+      variants: [{ name: 'my-variant', description: 'Desc', enabled: true }],
+    })
+    const results = await runSelectionEvals({
+      evaluator: mockEvaluator({ loaded: true, skillName: 'skill-a', raw: '' }),
+      skills: allSkills,
+      evals: [makeDiscovered(eval_)],
+    })
+    expect(results[0].variant).toBeUndefined()
+    expect(results[1].variant).toBe('my-variant')
   })
 })

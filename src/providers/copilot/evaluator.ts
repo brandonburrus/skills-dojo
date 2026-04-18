@@ -22,6 +22,7 @@ interface ToolCallCapture {
 function createLoadSkillTool(
   skills: Array<{ name: string; description: string }>,
   capture: ToolCallCapture,
+  onLoaded?: () => void,
 ): Tool<{ skill_name: string }> {
   return {
     name: 'load_skill',
@@ -39,6 +40,7 @@ function createLoadSkillTool(
     },
     handler: args => {
       capture.skillName = args.skill_name
+      onLoaded?.()
       return `Skill "${args.skill_name}" loaded successfully.`
     },
     skipPermission: true,
@@ -47,7 +49,7 @@ function createLoadSkillTool(
 
 export class CopilotEvaluator implements Evaluator {
   async runSelection(options: SelectionRunOptions): Promise<SelectionResult> {
-    const { signal, onEvent } = options
+    const { signal, onEvent, earlyBailout } = options
 
     if (signal?.aborted) {
       throw new Error('Aborted')
@@ -61,7 +63,15 @@ export class CopilotEvaluator implements Evaluator {
     const client = new CopilotClient()
     try {
       const capture: ToolCallCapture = { skillName: null }
-      const loadSkillTool = createLoadSkillTool(options.skills, capture)
+      let sessionRef: { abort: () => Promise<void> } | null = null
+
+      const onLoaded = earlyBailout
+        ? () => {
+            void sessionRef?.abort()
+          }
+        : undefined
+
+      const loadSkillTool = createLoadSkillTool(options.skills, capture, onLoaded)
 
       const session = await client.createSession({
         onPermissionRequest: approveAll,
@@ -72,6 +82,8 @@ export class CopilotEvaluator implements Evaluator {
         tools: [loadSkillTool as Tool],
         streaming: true,
       })
+
+      sessionRef = session
 
       if (onEvent) {
         session.on(event => {
@@ -91,9 +103,17 @@ export class CopilotEvaluator implements Evaluator {
       }
 
       try {
-        const response = await session.sendAndWait({ prompt: options.prompt }, options.timeout)
-
-        const raw = response?.data.content ?? ''
+        let raw = ''
+        try {
+          const response = await session.sendAndWait({ prompt: options.prompt }, options.timeout)
+          raw = response?.data.content ?? ''
+        } catch (err) {
+          // If early bailout triggered the abort and we captured a skill, that's a success
+          if (capture.skillName !== null) {
+            return { loaded: true, skillName: capture.skillName, raw: '' }
+          }
+          throw err
+        }
 
         if (capture.skillName !== null) {
           return { loaded: true, skillName: capture.skillName, raw }

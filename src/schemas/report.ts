@@ -10,6 +10,8 @@ const EvalResultSchema = z.object({
   }),
   durationMs: z.number(),
   error: z.string().optional(),
+  variant: z.string().optional(),
+  evalSkillName: z.string().nullable(),
 })
 
 export const RunReportSchema = z.object({

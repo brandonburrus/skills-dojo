@@ -1,7 +1,9 @@
+import { Command } from 'commander'
 import { loadConfig, type ConfigOverrides } from '../loaders/config.js'
 import { discoverSkills } from '../loaders/skill.js'
 import { discoverEvals } from '../loaders/eval.js'
 import { createTable, heading, truncate } from '../output/cli.js'
+import { getGlobalOptions } from './globals.js'
 
 export async function listCommand(startDir?: string, overrides?: ConfigOverrides): Promise<void> {
   const { config, configDir } = await loadConfig(startDir, overrides)
@@ -31,3 +33,11 @@ export async function listCommand(startDir?: string, overrides?: ConfigOverrides
     console.log(evalTable.toString())
   }
 }
+
+export const list = new Command('list')
+  .alias('ls')
+  .description('List discovered skills and evals')
+  .action(function (this: Command) {
+    const { startDir, overrides } = getGlobalOptions(this)
+    return listCommand(startDir, overrides)
+  })

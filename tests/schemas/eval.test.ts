@@ -89,4 +89,45 @@ describe('EvalSchema', () => {
       }),
     ).toThrow()
   })
+
+  it('accepts eval with inline variants', () => {
+    const result = EvalSchema.parse({
+      name: 'test',
+      type: 'selection',
+      prompt: 'Pick one',
+      selection: { expect: 'my-skill', available: 'all' },
+      variants: [{ name: 'concise', description: 'Short version' }],
+    })
+    expect(result.type).toBe('selection')
+    if (result.type === 'selection') {
+      expect(result.variants).toHaveLength(1)
+      expect(result.variants![0].enabled).toBe(true)
+    }
+  })
+
+  it('accepts eval with config.variants', () => {
+    const result = EvalSchema.parse({
+      name: 'test',
+      type: 'selection',
+      prompt: 'Pick one',
+      selection: { expect: 'my-skill', available: 'all' },
+      config: { variants: 'disabled' },
+    })
+    if (result.type === 'selection') {
+      expect(result.config?.variants).toBe('disabled')
+    }
+  })
+
+  it('defaults config.variants to all', () => {
+    const result = EvalSchema.parse({
+      name: 'test',
+      type: 'selection',
+      prompt: 'Pick one',
+      selection: { expect: 'my-skill', available: 'all' },
+      config: {},
+    })
+    if (result.type === 'selection') {
+      expect(result.config?.variants).toBe('all')
+    }
+  })
 })

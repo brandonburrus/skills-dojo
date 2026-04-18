@@ -1,6 +1,20 @@
 import chalk from 'chalk'
 import Table from 'cli-table3'
 import figures from 'figures'
+import figlet from 'figlet'
+import boxen from 'boxen'
+
+/** Render the DOJO banner in ASCII art */
+export function dojoBanner() {
+  return chalk.bold.redBright(
+    figlet.textSync('DOJO', {
+      font: 'Sub-Zero',
+      horizontalLayout: 'fitted',
+      verticalLayout: 'fitted',
+      whitespaceBreak: false,
+    }),
+  )
+}
 
 /** Log a success line: green tick + plain white message */
 export function logSuccess(message: string): void {
@@ -14,12 +28,12 @@ export function logFailure(message: string): void {
 
 /** Bold blueBright heading */
 export function heading(text: string): string {
-  return chalk.blueBright.bold(text)
+  return chalk.bold(text)
 }
 
 /** Dim blueBright hint text */
 export function dim(text: string): string {
-  return chalk.blueBright.dim(text)
+  return chalk.yellow.dim(text)
 }
 
 /** PASS/FAIL status label for tables */
@@ -37,10 +51,25 @@ export function truncate(text: string, maxLength: number): string {
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text
 }
 
-/** Create a consistently styled CLI table */
-export function createTable(columns: string[]): Table.Table {
+/** 80-char horizontal rule */
+export function hr(char = '\u2500'): string {
+  return chalk.dim(char.repeat(80))
+}
+
+/** Create a consistently styled CLI table with word wrap */
+export function createTable(columns: string[], colWidths?: number[]): Table.Table {
   return new Table({
     head: columns,
     style: { head: ['white'], border: ['gray'] },
+    wordWrap: true,
+    ...(colWidths ? { colWidths } : {}),
+  })
+}
+
+export function box(text: string) {
+  return boxen(text, {
+    width: 80,
+    borderColor: 'gray',
+    borderStyle: 'round',
   })
 }

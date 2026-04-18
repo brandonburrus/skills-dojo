@@ -16,6 +16,7 @@ const makeReport = (overrides: Partial<RunReport> = {}): RunReport => ({
       expected: 'my-skill',
       actual: { loaded: true, skillName: 'my-skill' },
       durationMs: 1200,
+      evalSkillName: 'my-skill',
     },
     {
       eval: 'test-fail',
@@ -24,6 +25,7 @@ const makeReport = (overrides: Partial<RunReport> = {}): RunReport => ({
       actual: { loaded: false, skillName: null },
       durationMs: 500,
       error: 'skill not loaded',
+      evalSkillName: 'my-skill',
     },
   ],
   ...overrides,
@@ -35,44 +37,47 @@ describe('formatRunReport', () => {
 
     expect(output).toContain('PASS')
     expect(output).toContain('FAIL')
-    expect(output).toContain('Run: abc-123')
-    expect(output).toContain('1.2s')
-    expect(output).toContain('0.5s')
+    expect(output).toContain('Skill: my-skill')
   })
 
-  it('shows correct summary for all passing', () => {
+  it('shows flat table with eval names when no variants', () => {
+    const output = formatRunReport(makeReport())
+
+    expect(output).toContain('test-pass')
+    expect(output).toContain('test-fail')
+    expect(output).toContain('Eval')
+  })
+
+  it('shows variant matrix when variants present', () => {
     const report = makeReport({
-      totalEvals: 3,
-      passed: 3,
-      failed: 0,
       results: [
         {
-          eval: 'a',
+          eval: 'pick-skill',
           passed: true,
           expected: 'my-skill',
           actual: { loaded: true, skillName: 'my-skill' },
           durationMs: 100,
+          evalSkillName: 'my-skill',
         },
         {
-          eval: 'b',
-          passed: true,
+          eval: 'pick-skill',
+          passed: false,
           expected: 'my-skill',
-          actual: { loaded: true, skillName: 'my-skill' },
+          actual: { loaded: false, skillName: null },
           durationMs: 200,
-        },
-        {
-          eval: 'c',
-          passed: true,
-          expected: 'my-skill',
-          actual: { loaded: true, skillName: 'my-skill' },
-          durationMs: 300,
+          variant: 'concise',
+          evalSkillName: 'my-skill',
         },
       ],
     })
 
     const output = formatRunReport(report)
 
-    expect(output).toContain('3/3 passed')
+    expect(output).toContain('current')
+    expect(output).toContain('concise')
+    expect(output).toContain('pick-skill')
+    expect(output).toContain('PASS')
+    expect(output).toContain('FAIL')
   })
 
   it('formats without error when results are empty', () => {
@@ -85,7 +90,6 @@ describe('formatRunReport', () => {
 
     const output = formatRunReport(report)
 
-    expect(output).toContain('0/0 passed')
-    expect(output).toContain('Run: abc-123')
+    expect(output).toContain('Skill: my-skill')
   })
 })

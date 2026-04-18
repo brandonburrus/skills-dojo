@@ -1,18 +1,28 @@
+import { availableParallelism } from 'node:os'
 import { createWriteStream } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import chalk from 'chalk'
-import ora, { type Ora } from 'ora'
+import { Command } from 'commander'
+import { Listr, ListrDefaultRendererLogLevels } from 'listr2'
 import pino from 'pino'
 import { loadConfig, type ConfigOverrides } from '../loaders/config.js'
 import { discoverSkills } from '../loaders/skill.js'
 import { discoverEvals } from '../loaders/eval.js'
+import { discoverVariants } from '../loaders/variant.js'
 import { formatRunReport } from '../output/table.js'
-import { errorText, heading, logSuccess, logFailure } from '../output/cli.js'
+import { dojoBanner, errorText, heading } from '../output/cli.js'
 import { CopilotEvaluator } from '../providers/copilot/evaluator.js'
-import { runSelectionEvals, type EvalResult } from '../runner/selection.js'
-import type { RunReport } from '../types.js'
+import {
+  buildWorkItems,
+  runSingleEval,
+  type EvalResult,
+  type WorkItem,
+} from '../runner/selection.js'
+import type { RunReport, Variant } from '../types.js'
 import { generateRunId } from '../utils/run-id.js'
+import { getGlobalOptions } from './globals.js'
+import { globMatch } from '../utils/glob-match.js'
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: intentional stripping of ANSI/control sequences
 const CONTROL_CHARS_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]|\x1B\[[0-9;]*[A-Za-z]/g
@@ -163,9 +173,40 @@ function handleSessionEvent(event: { type: string; [key: string]: unknown }): vo
   }
 }
 
+function variantLabel(variantName: string): string {
+  return variantName === 'base' ? '[current]' : `[variant: ${variantName}]`
+}
+
+function taskTitle(skillName: string | null, evalName: string, variantName: string): string {
+  const skill = skillName ? `${skillName} ` : ''
+  return `${skill}${evalName} ${variantLabel(variantName)}`
+}
+
+function completedTitle(
+  skillName: string | null,
+  evalName: string,
+  variantName: string,
+  result: EvalResult,
+): string {
+  const duration = chalk.dim(`(${(result.durationMs / 1000).toFixed(1)}s)`)
+  const prefix = skillName ? `${skillName} ` : ''
+  return `${prefix}${evalName} ${variantLabel(variantName)} ${duration}`
+}
+
+interface ListrContext {
+  results: EvalResult[]
+}
+
 export async function runCommand(
   skill: string | undefined,
-  options: { type?: string; output?: string; inspect?: boolean },
+  options: {
+    type?: string
+    eval?: string
+    variant?: string
+    output?: string
+    inspect?: boolean
+    parallelism?: string
+  },
   startDir?: string,
   overrides?: ConfigOverrides,
 ): Promise<void> {
@@ -179,13 +220,23 @@ export async function runCommand(
   }
 
   if (skill) {
-    const filter = skill.toLowerCase()
-    evals = evals.filter(s => s.skillName?.toLowerCase().includes(filter))
+    evals = evals.filter(s => s.skillName != null && globMatch(skill, s.skillName))
+  }
+
+  if (options.eval) {
+    evals = evals.filter(s => globMatch(options.eval!, s.eval.name))
   }
 
   if (evals.length === 0) {
     console.error(errorText('No evals found.'))
     return
+  }
+
+  const variantFiles = await discoverVariants(skills)
+  const skillVariants = new Map<string, Variant[]>()
+  for (const vf of variantFiles) {
+    const existing = skillVariants.get(vf.skillName) ?? []
+    skillVariants.set(vf.skillName, [...existing, ...vf.variants])
   }
 
   const provider = config.model.provider
@@ -223,83 +274,115 @@ export async function runCommand(
     loggers.set(skillName, pino({ timestamp: pino.stdTimeFunctions.isoTime }, stream))
   }
 
-  let currentEvalSkill: string | null = null
+  const parallelism =
+    options.parallelism === 'false' || (options.parallelism as unknown) === false
+      ? 1
+      : options.parallelism
+        ? Number.parseInt(options.parallelism, 10)
+        : availableParallelism()
 
-  const onEvent = (event: { type: string; [key: string]: unknown }): void => {
-    const logger = loggers.get(currentEvalSkill)
-    if (logger) {
-      const data = (event.data ?? {}) as Record<string, unknown>
-      logger.info({ eventType: event.type, ...data })
-    }
-    if (options.inspect) handleSessionEvent(event)
+  const workItems = buildWorkItems({
+    evaluator,
+    skills,
+    evals,
+    skillVariants,
+    variantFilter: options.variant,
+  })
+  const totalRuns = workItems.length
+
+  const isInspect = options.inspect === true
+
+  const taskItems = workItems.map((item: WorkItem, index: number) => ({
+    title: taskTitle(item.skillName, item.eval_.name, item.variantName),
+    task: async (_ctx: ListrContext, task: { title: string }) => {
+      const onEvent = (event: { type: string; [key: string]: unknown }): void => {
+        const logger = loggers.get(item.skillName)
+        if (logger) {
+          const data = (event.data ?? {}) as Record<string, unknown>
+          logger.info({ eventType: event.type, ...data })
+        }
+        if (isInspect) handleSessionEvent(event)
+      }
+
+      const result = await runSingleEval(
+        item.eval_,
+        item.skillList,
+        item.variantName,
+        item.skillName,
+        index,
+        totalRuns,
+        {
+          evaluator,
+          signal: ac.signal,
+          onEvent,
+        },
+      )
+
+      task.title = completedTitle(item.skillName, item.eval_.name, item.variantName, result)
+      _ctx.results.push(result)
+
+      if (!result.passed) {
+        throw new Error(task.title)
+      }
+    },
+  }))
+
+  const sharedOptions = {
+    concurrent: parallelism,
+    exitOnError: false,
+    collectErrors: 'minimal' as const,
+  }
+
+  // biome-ignore lint/suspicious/noExplicitAny: listr2 renderer generics make a single type impractical
+  let tasks: Listr<ListrContext, any, any>
+  if (isInspect) {
+    // biome-ignore lint/suspicious/noExplicitAny: listr2 renderer types require exact literal match
+    tasks = new Listr<ListrContext, any, any>(taskItems, {
+      ...sharedOptions,
+      renderer: 'verbose',
+      fallbackRenderer: 'simple',
+    })
+  } else {
+    // biome-ignore lint/suspicious/noExplicitAny: listr2 renderer types require exact literal match
+    tasks = new Listr<ListrContext, any, any>(taskItems, {
+      ...sharedOptions,
+      renderer: 'default',
+      fallbackRenderer: 'simple',
+      rendererOptions: {
+        color: {
+          [ListrDefaultRendererLogLevels.PENDING]: (message?: string) => chalk.blue(message ?? ''),
+        },
+      },
+    })
   }
 
   let aborted = false
-  let spinner: Ora | undefined
 
   try {
-    const results = await runSelectionEvals({
-      evaluator,
-      skills,
-      evals,
-      signal: ac.signal,
-      onEvent,
-      onProgress: info => {
-        const tag = `[${info.evalIndex + 1}/${info.totalEvals}]`
+    console.error(dojoBanner())
+    console.error(heading(`Starting run: ${chalk.bold.italic.yellow(runId)}`))
+    console.error('')
 
-        if (info.status === 'start') {
-          currentEvalSkill = evals[info.evalIndex].skillName
-          if (options.inspect && info.setup) {
-            const { setup } = info
-            const promptSnippet =
-              setup.prompt.length > 100 ? `${setup.prompt.slice(0, 100)}...` : setup.prompt
+    const initialCtx: ListrContext = { results: [] }
+    let ctx: ListrContext
 
-            console.error('')
-            console.error(`${tag} ${heading(info.evalName)}`)
-            console.error(chalk.dim(`  expect: ${setup.expected}`))
-            console.error(chalk.dim(`  prompt: "${promptSnippet}"`))
-          } else {
-            spinner = ora({ text: `${tag} ${info.evalName}`, stream: process.stderr }).start()
-          }
-        }
+    try {
+      ctx = await tasks.run(initialCtx)
+    } catch {
+      // listr2 throws when tasks fail with exitOnError: false in some renderers.
+      // Results are already collected in the context.
+      ctx = initialCtx
+    }
 
-        if (info.status === 'complete' && info.result) {
-          const { result } = info
-          const duration = `${(result.durationMs / 1000).toFixed(1)}s`
-          const actual = result.actual.loaded
-            ? `loaded "${result.actual.skillName}"`
-            : 'no skill loaded'
-
-          if (spinner) {
-            if (result.error) {
-              spinner.fail(`${tag} ${info.evalName} -- ${result.error} (${duration})`)
-            } else if (result.passed) {
-              spinner.succeed(`${tag} ${info.evalName} -- ${actual} (${duration})`)
-            } else {
-              spinner.fail(`${tag} ${info.evalName} -- ${actual} (${duration})`)
-            }
-            spinner = undefined
-          } else {
-            if (result.error) {
-              logFailure(`${tag} ${info.evalName} -- ${result.error} (${duration})`)
-            } else if (result.passed) {
-              logSuccess(`${tag} ${info.evalName} -- ${actual} (${duration})`)
-            } else {
-              logFailure(`${tag} ${info.evalName} -- ${actual} (${duration})`)
-            }
-          }
-        }
-      },
-    })
+    const results = ctx.results
 
     aborted = ac.signal.aborted
 
     const reportsBySkill = new Map<string | null, EvalResult[]>()
-    for (let i = 0; i < evals.length; i++) {
-      const skillName = evals[i].skillName
-      const list = reportsBySkill.get(skillName) ?? []
-      list.push(results[i])
-      reportsBySkill.set(skillName, list)
+    for (const result of results) {
+      const list = reportsBySkill.get(result.evalSkillName) ?? []
+      list.push(result)
+      reportsBySkill.set(result.evalSkillName, list)
     }
 
     const reports: RunReport[] = []
@@ -341,9 +424,6 @@ export async function runCommand(
       await writeFile(options.output, JSON.stringify(combined, null, 2))
     }
 
-    const totalPassed = results.filter(r => r.passed).length
-    console.error(heading(`Overall: ${totalPassed}/${results.length} passed`))
-
     if (aborted) {
       console.error(errorText('Run interrupted.'))
     }
@@ -352,3 +432,27 @@ export async function runCommand(
     for (const stream of logStreams) stream.end()
   }
 }
+
+interface RunOptions {
+  type?: string
+  eval?: string
+  variant?: string
+  output?: string
+  inspect?: boolean
+  parallelism?: string
+}
+
+export const run = new Command('run')
+  .description('Run evals')
+  .argument('[skill]', 'Filter by skill name')
+  .option('-e, --eval <name>', 'Run only evals matching this name')
+  .option('-V, --variant <name>', 'Run only a specific variant (by name)')
+  .option('-p, --parallelism <n>', 'Max concurrent eval runs (default: CPU cores)')
+  .option('--no-parallelism', 'Run evals sequentially')
+  .option('-t, --type <type>', 'Filter by eval type (selection)')
+  .option('-o, --output <path>', 'Write combined report to file')
+  .option('-i, --inspect', 'Show full session telemetry and streaming output')
+  .action(function (this: Command, skill: string | undefined, options: RunOptions) {
+    const { startDir, overrides } = getGlobalOptions(this)
+    return runCommand(skill, options, startDir, overrides)
+  })

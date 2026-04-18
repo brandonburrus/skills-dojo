@@ -10,6 +10,8 @@ export interface SelectionRunOptions {
   timeout: number
   onEvent?: (event: { type: string; [key: string]: unknown }) => void
   signal?: AbortSignal
+  /** When set, abort the session as soon as any skill is loaded (skips remaining agent turns). */
+  earlyBailout?: boolean
 }
 
 export interface Evaluator {

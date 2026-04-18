@@ -16,6 +16,7 @@ describe('RunReportSchema', () => {
         expected: 'my-skill',
         actual: { loaded: true, skillName: 'my-skill' },
         durationMs: 150,
+        evalSkillName: 'my-skill',
       },
       {
         eval: 'test-2',
@@ -24,6 +25,7 @@ describe('RunReportSchema', () => {
         actual: { loaded: false, skillName: null },
         durationMs: 200,
         error: 'Skill not found',
+        evalSkillName: null,
       },
     ],
   }

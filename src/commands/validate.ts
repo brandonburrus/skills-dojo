@@ -1,3 +1,4 @@
+import { Command } from 'commander'
 import chalk from 'chalk'
 import {
   DojoError,
@@ -10,6 +11,7 @@ import { discoverSkills } from '../loaders/skill.js'
 import { discoverEvals } from '../loaders/eval.js'
 import { logSuccess, logFailure } from '../output/cli.js'
 import type { DiscoveredSkill } from '../types.js'
+import { getGlobalOptions } from './globals.js'
 
 function formatError(error: DojoError): string {
   if (error instanceof ConfigValidationError) {
@@ -92,3 +94,10 @@ export async function validateCommand(
     process.exitCode = 1
   }
 }
+
+export const validate = new Command('validate')
+  .description('Validate skills and evals')
+  .action(function (this: Command) {
+    const { startDir, overrides } = getGlobalOptions(this)
+    return validateCommand(startDir, overrides)
+  })

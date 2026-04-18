@@ -1,0 +1,6 @@
+name: ambiguous-data-request
+type: selection
+prompt: "I have a CSV file with customer data and I need to find duplicates and clean it up."
+selection:
+  expect: sql-queries
+  available: all

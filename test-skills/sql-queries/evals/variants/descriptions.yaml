@@ -1,0 +1,10 @@
+- name: concise
+  description: Write and optimize SQL queries across all major database dialects.
+
+- name: verbose
+  description: >
+    Write correct, performant SQL across all major data warehouse and database
+    dialects including Snowflake, BigQuery, Databricks, PostgreSQL, MySQL, and
+    SQL Server. Use this skill when writing new queries, optimizing slow SQL,
+    translating between dialects, or building complex analytical queries with
+    CTEs, window functions, joins, subqueries, and aggregations.

@@ -1,4 +1,5 @@
 import { z } from 'zod/v4'
+import { VariantConfigSchema, VariantSchema } from './variant.js'
 
 const DecoySchema = z.object({
   name: z.string(),
@@ -15,6 +16,12 @@ export const SelectionEvalSchema = z.object({
     available: z.union([z.literal('all'), z.array(z.string())]),
     decoys: z.array(DecoySchema).optional(),
   }),
+  variants: z.array(VariantSchema).optional(),
+  config: z
+    .object({
+      variants: VariantConfigSchema,
+    })
+    .optional(),
 })
 
 export const EvalSchema = z.discriminatedUnion('type', [SelectionEvalSchema])
