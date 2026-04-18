@@ -1,6 +1,6 @@
 {
   "name": "skills-dojo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Toolkit for testing and evaluating AI agent skills",
   "author": "Brandon Burrus <brandon@burrus.io>",
   "license": "MIT",
