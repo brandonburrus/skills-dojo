@@ -10,6 +10,9 @@ Skills follow the [agentskills.io specification](https://agentskills.io/specific
 - Husky `pre-commit` hook runs `npm run lint && npm test`. Both must
   pass before a commit is accepted.
 - Zod v4 is used throughout -- import from `zod/v4`, not `zod`.
+- Always work from a feature branch. Use `feat/<description>` for new
+  features and `fix/<description>` for patches (e.g. `feat/new-feature-thing`,
+  `fix/patch-this-thing`). Never commit directly to `main`.
 
 ## Architecture
 
