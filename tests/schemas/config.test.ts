@@ -15,8 +15,8 @@ describe('DojoConfigSchema', () => {
       '.opencode/skills',
     ])
     expect(result.model.provider).toBe('copilot')
-    expect(result.model.evaluator).toBe('gpt-4o-mini')
-    expect(result.model.judge).toBe('gpt-4o-mini')
+    expect(result.model.evaluator).toBeUndefined()
+    expect(result.model.judge).toBeUndefined()
   })
 
   it('accepts partial config and fills defaults', () => {
@@ -25,7 +25,7 @@ describe('DojoConfigSchema', () => {
     })
     expect(result.model.judge).toBe('gpt-4o')
     expect(result.model.provider).toBe('copilot')
-    expect(result.model.evaluator).toBe('gpt-4o-mini')
+    expect(result.model.evaluator).toBeUndefined()
   })
 
   it('accepts fully specified config', () => {
@@ -47,7 +47,7 @@ describe('DojoConfigSchema', () => {
 
   it('exports DEFAULT_CONFIG', () => {
     expect(DEFAULT_CONFIG.model.provider).toBe('copilot')
-    expect(DEFAULT_CONFIG.model.judge).toBe('gpt-4o-mini')
+    expect(DEFAULT_CONFIG.model.judge).toBeUndefined()
   })
 
   it('rejects invalid types', () => {

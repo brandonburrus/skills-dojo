@@ -8,7 +8,7 @@ import {
 } from '../errors.js'
 import { loadConfig, type ConfigOverrides } from '../loaders/config.js'
 import { discoverSkills } from '../loaders/skill.js'
-import { discoverEvals } from '../loaders/eval.js'
+import { discoverSelectionFiles } from '../loaders/eval.js'
 import { logSuccess, logFailure } from '../output/cli.js'
 import type { DiscoveredSkill } from '../types.js'
 import { getGlobalOptions } from './globals.js'
@@ -62,8 +62,8 @@ export async function validateCommand(
     }
 
     try {
-      const evals = await discoverEvals(configDir, skills)
-      evalCount = evals.length
+      const selectionFiles = await discoverSelectionFiles(configDir, skills)
+      evalCount = selectionFiles.reduce((sum, sf) => sum + sf.file.evals.length, 0)
       logSuccess(`${evalCount} eval${evalCount === 1 ? '' : 's'} validated`)
     } catch (error) {
       if (error instanceof DojoError) {

@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
+import { stringify as toYaml } from 'yaml'
 import { listCommand } from '../../src/commands/list.js'
 import * as configLoader from '../../src/loaders/config.js'
 
@@ -9,15 +10,10 @@ function makeSkillMd(name: string, description = 'A useful skill'): string {
   return `---\nname: ${name}\ndescription: ${description}\n---\n\n# ${name}\n`
 }
 
-function makeEvalYaml(name: string, expect_skill: string): string {
-  return [
-    `name: ${name}`,
-    'type: selection',
-    'prompt: Pick the right skill',
-    'selection:',
-    `  expect: ${expect_skill}`,
-    '  available: all',
-  ].join('\n')
+function makeSelectionYaml(evalName: string, assertSkill: string): string {
+  return toYaml({
+    evals: [{ name: evalName, prompt: 'Pick the right skill', assert: [assertSkill] }],
+  })
 }
 
 describe('listCommand', () => {
@@ -39,7 +35,7 @@ describe('listCommand', () => {
     const evalsDir = join(skillsDir, 'evals')
     await mkdir(evalsDir, { recursive: true })
     await writeFile(join(skillsDir, 'SKILL.md'), makeSkillMd('my-skill', 'Does things'))
-    await writeFile(join(evalsDir, 'test.yaml'), makeEvalYaml('pick-skill', 'my-skill'))
+    await writeFile(join(evalsDir, 'selection.yaml'), makeSelectionYaml('pick-skill', 'my-skill'))
 
     vi.spyOn(configLoader, 'loadConfig').mockResolvedValue({
       config: {
@@ -56,7 +52,6 @@ describe('listCommand', () => {
     expect(output).toContain('my-skill')
     expect(output).toContain('Does things')
     expect(output).toContain('pick-skill')
-    expect(output).toContain('selection')
   })
 
   it('prints "No skills found" for empty project', async () => {

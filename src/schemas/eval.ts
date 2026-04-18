@@ -1,27 +1,43 @@
 import { z } from 'zod/v4'
-import { VariantConfigSchema, VariantSchema } from './variant.js'
 
-const DecoySchema = z.object({
+export const DecoySchema = z.object({
   name: z.string(),
-  description: z.string(),
+  value: z.string(),
+  enabled: z.boolean().optional().default(true),
 })
+
+export const VariantSchema = z.object({
+  name: z.string().min(1).max(100),
+  value: z.string().min(1).max(10000),
+  enabled: z.boolean().optional().default(true),
+  decoys: z.array(DecoySchema).optional(),
+})
+
+const RunModeSchema = z.enum(['all', 'variants-only', 'current-only'])
+
+const VariantsRefSchema = z.union([z.literal('all'), z.array(z.string()), z.array(VariantSchema)])
 
 export const SelectionEvalSchema = z.object({
   name: z.string(),
-  type: z.literal('selection'),
   prompt: z.string(),
-  timeout_seconds: z.number().positive().optional().default(30),
-  selection: z.object({
-    expect: z.string(),
-    available: z.union([z.literal('all'), z.array(z.string())]),
-    decoys: z.array(DecoySchema).optional(),
-  }),
-  variants: z.array(VariantSchema).optional(),
-  config: z
-    .object({
-      variants: VariantConfigSchema,
-    })
-    .optional(),
+  model: z.string().optional(),
+  timeout: z.number().positive().optional(),
+  enabled: z.boolean().optional().default(true),
+  skills: z.union([z.literal('all'), z.array(z.string())]).optional(),
+  'run-mode': RunModeSchema.optional(),
+  assert: z.union([z.array(z.string()), z.literal('none'), z.literal('any')]).optional(),
+  variants: VariantsRefSchema.optional().default('all'),
+  decoys: z.array(DecoySchema).optional(),
 })
 
-export const EvalSchema = z.discriminatedUnion('type', [SelectionEvalSchema])
+export const SelectionFileSchema = z.object({
+  model: z.string().optional(),
+  timeout: z.number().positive().optional().default(30),
+  skills: z
+    .union([z.literal('all'), z.array(z.string())])
+    .optional()
+    .default('all'),
+  'run-mode': RunModeSchema.optional().default('all'),
+  variants: z.array(VariantSchema).optional(),
+  evals: z.array(SelectionEvalSchema),
+})

@@ -1,16 +1,22 @@
 import type { z } from 'zod/v4'
 import type { DojoConfigSchema } from './schemas/config.js'
 import type { RunReportSchema } from './schemas/report.js'
-import type { EvalSchema, SelectionEvalSchema } from './schemas/eval.js'
+import type {
+  DecoySchema,
+  SelectionEvalSchema,
+  SelectionFileSchema,
+  VariantSchema,
+} from './schemas/eval.js'
 import type { SkillFrontmatterSchema } from './schemas/skill.js'
-import type { VariantSchema } from './schemas/variant.js'
 
 export type DojoConfig = z.infer<typeof DojoConfigSchema>
 export type SkillFrontmatter = z.infer<typeof SkillFrontmatterSchema>
-export type SelectionEval = z.infer<typeof SelectionEvalSchema>
-export type Eval = z.infer<typeof EvalSchema>
 export type RunReport = z.infer<typeof RunReportSchema>
+
 export type Variant = z.infer<typeof VariantSchema>
+export type Decoy = z.infer<typeof DecoySchema>
+export type SelectionEval = z.infer<typeof SelectionEvalSchema>
+export type SelectionFile = z.infer<typeof SelectionFileSchema>
 
 export interface DiscoveredSkill {
   name: string
@@ -19,16 +25,10 @@ export interface DiscoveredSkill {
   frontmatter: SkillFrontmatter
 }
 
-export interface DiscoveredVariant {
+export interface DiscoveredSelectionFile {
   filePath: string
-  skillName: string
-  variants: Variant[]
-}
-
-export interface DiscoveredEval {
-  filePath: string
-  eval: SelectionEval
   skillName: string | null
+  file: SelectionFile
 }
 
 export interface GlobalOptions {

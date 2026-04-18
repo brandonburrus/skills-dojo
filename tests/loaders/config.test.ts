@@ -27,7 +27,7 @@ describe('loadConfig', () => {
     await writeFile(path.join(tmpDir, 'dojo.toml'), '[model]\nprovider = "openai"\n')
     const result = await loadConfig(tmpDir)
     expect(result.config.model.provider).toBe('openai')
-    expect(result.config.model.judge).toBe('gpt-4o-mini')
+    expect(result.config.model.judge).toBeUndefined()
     expect(result.configDir).toBe(tmpDir)
   })
 

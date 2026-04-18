@@ -1,45 +1,56 @@
 import type { Evaluator, SelectionResult } from '../providers/types.js'
-import type { DiscoveredEval, DiscoveredSkill, SelectionEval, Variant } from '../types.js'
+import type {
+  Decoy,
+  DiscoveredSelectionFile,
+  DiscoveredSkill,
+  SelectionEval,
+  SelectionFile,
+  Variant,
+} from '../types.js'
 import { globMatch } from '../utils/glob-match.js'
 
 export function buildSkillList(
   allSkills: readonly DiscoveredSkill[],
-  eval_: SelectionEval,
+  skills: 'all' | string[],
+  decoys: Decoy[],
 ): Array<{ name: string; description: string }> {
-  const { available, decoys } = eval_.selection
-
-  const skills =
-    available === 'all'
+  const base =
+    skills === 'all'
       ? allSkills.map(s => ({ name: s.name, description: s.description }))
       : allSkills
-          .filter(s => available.includes(s.name))
+          .filter(s => skills.includes(s.name))
           .map(s => ({ name: s.name, description: s.description }))
 
-  return decoys ? [...skills, ...decoys] : [...skills]
+  const decoyEntries = decoys.map(d => ({ name: d.name, description: d.value }))
+  return [...base, ...decoyEntries]
 }
 
-export function evaluateResult(expected: string, result: SelectionResult): boolean {
-  if (expected === 'none') return !result.loaded
-  if (expected === 'any') return result.loaded
-  return result.loaded && result.skillName === expected
+function serializeAssert(assert: string[] | 'none' | 'any'): string {
+  if (assert === 'none' || assert === 'any') return assert
+  return assert.join(',')
+}
+
+export function evaluateResult(
+  assert: string[] | 'none' | 'any',
+  result: SelectionResult,
+): boolean {
+  if (assert === 'none' || (Array.isArray(assert) && assert.length === 0)) return !result.loaded
+  if (assert === 'any') return result.loaded
+  return result.loaded && result.skillName !== null && assert.includes(result.skillName)
 }
 
 export interface ProgressInfo {
-  /** 0-based index of the current run (across all evals and variants) */
   runIndex: number
-  /** Total number of runs that will execute */
   totalRuns: number
   evalName: string
   variantName?: string
   status: 'start' | 'complete'
-  /** Available on 'start' — details about what's being set up */
   setup?: {
     prompt: string
     expected: string
     skills: Array<{ name: string; description: string }>
     timeoutMs: number
   }
-  /** Available on 'complete' */
   result?: {
     passed: boolean
     actual: { loaded: boolean; skillName: string | null }
@@ -51,15 +62,12 @@ export interface ProgressInfo {
 export interface SelectionRunnerOptions {
   evaluator: Evaluator
   skills: readonly DiscoveredSkill[]
-  evals: readonly DiscoveredEval[]
+  selectionFiles: readonly DiscoveredSelectionFile[]
+  defaultModel?: string
   signal?: AbortSignal
   onProgress?: (info: ProgressInfo) => void
   onEvent?: (event: { type: string; [key: string]: unknown }) => void
-  /** Skill-level variants keyed by skill name */
-  skillVariants?: Map<string, Variant[]>
-  /** When set, only run the variant matching this name (or "base") */
   variantFilter?: string
-  /** Max concurrent eval runs. Defaults to 1 (sequential). */
   parallelism?: number
 }
 
@@ -70,60 +78,167 @@ export interface EvalResult {
   actual: { loaded: boolean; skillName: string | null }
   durationMs: number
   variant?: string
-  /** The skill this eval belongs to (null for root-level evals) */
   evalSkillName: string | null
   error?: string
 }
 
-function resolveVariants(
-  eval_: SelectionEval,
-  skillVariants: Map<string, Variant[]> | undefined,
-  skillName: string | null,
-): Variant[] {
-  const variantConfig = eval_.config?.variants ?? 'all'
-
-  if (variantConfig === 'disabled') return []
-
-  const inlineVariants = (eval_.variants ?? []).filter(v => v.enabled)
-
-  if (variantConfig === 'inline-only') return inlineVariants
-
-  // 'all' or 'variant-only': skill-level + inline
-  const skillLevel = skillName ? (skillVariants?.get(skillName) ?? []).filter(v => v.enabled) : []
-  const combined = [...skillLevel, ...inlineVariants]
-
-  const seen = new Set<string>()
-  for (const v of combined) {
-    if (seen.has(v.name)) {
-      console.error(`Warning: duplicate variant name "${v.name}" in eval "${eval_.name}"`)
-    }
-    seen.add(v.name)
-  }
-
-  return combined
+export interface WorkItem {
+  eval_: SelectionEval
+  skillList: Array<{ name: string; description: string }>
+  variantName: string
+  skillName: string | null
+  timeout: number
+  assert: string[] | 'none' | 'any'
+  model?: string
 }
 
-/** Swaps the description of the expected skill in the skill list with the variant's description. */
+function resolveSkills(eval_: SelectionEval, file: SelectionFile): 'all' | string[] {
+  return eval_.skills ?? file.skills
+}
+
+function resolveRunMode(
+  eval_: SelectionEval,
+  file: SelectionFile,
+): 'all' | 'variants-only' | 'current-only' {
+  return eval_['run-mode'] ?? file['run-mode']
+}
+
+function resolveTimeout(eval_: SelectionEval, file: SelectionFile): number {
+  return eval_.timeout ?? file.timeout
+}
+
+function resolveModel(
+  eval_: SelectionEval,
+  file: SelectionFile,
+  defaultModel?: string,
+): string | undefined {
+  return eval_.model ?? file.model ?? defaultModel
+}
+
+function resolveAssert(
+  eval_: SelectionEval,
+  skillName: string | null,
+): (string[] | 'none' | 'any') | null {
+  if (eval_.assert !== undefined) return eval_.assert
+  if (skillName !== null) return [skillName]
+  return null
+}
+
+function isStringArray(arr: readonly (string | Variant)[]): arr is string[] {
+  return arr.length > 0 && typeof arr[0] === 'string'
+}
+
+function resolveVariants(eval_: SelectionEval, fileVariants: Variant[] | undefined): Variant[] {
+  const ref = eval_.variants
+
+  if (ref === 'all') {
+    return (fileVariants ?? []).filter(v => v.enabled)
+  }
+
+  if (ref.length === 0) return []
+
+  if (isStringArray(ref)) {
+    const names = new Set(ref)
+    const available = fileVariants ?? []
+    const availableNames = new Set(available.map(v => v.name))
+    for (const name of names) {
+      if (!availableNames.has(name)) {
+        console.error(`Warning: variant "${name}" referenced in eval "${eval_.name}" not found`)
+      }
+    }
+    return available.filter(v => v.enabled && names.has(v.name))
+  }
+
+  return ref.filter(v => v.enabled)
+}
+
+function mergeDecoys(variantDecoys: Decoy[] | undefined, evalDecoys: Decoy[] | undefined): Decoy[] {
+  const all = [...(variantDecoys ?? []), ...(evalDecoys ?? [])]
+  const seen = new Set<string>()
+  const result: Decoy[] = []
+  for (const d of all) {
+    if (d.enabled && !seen.has(d.name)) {
+      seen.add(d.name)
+      result.push(d)
+    }
+  }
+  return result
+}
+
+/** Replaces the description of asserted skills with the variant's value. */
 function applyVariantToSkillList(
   skillList: Array<{ name: string; description: string }>,
-  expectedSkill: string,
+  assert: string[] | 'none' | 'any',
   variant: Variant,
 ): Array<{ name: string; description: string }> {
-  return skillList.map(s =>
-    s.name === expectedSkill ? { ...s, description: variant.description } : s,
-  )
+  if (assert === 'none' || assert === 'any') return skillList
+  const assertSet = new Set(assert)
+  return skillList.map(s => (assertSet.has(s.name) ? { ...s, description: variant.value } : s))
+}
+
+export function buildWorkItems(options: SelectionRunnerOptions): WorkItem[] {
+  const { skills: allSkills, selectionFiles, variantFilter, defaultModel } = options
+  const items: WorkItem[] = []
+
+  for (const { file, skillName } of selectionFiles) {
+    for (const eval_ of file.evals) {
+      if (!eval_.enabled) continue
+
+      const assert = resolveAssert(eval_, skillName)
+      if (assert === null) {
+        console.error(`Warning: skipping eval "${eval_.name}" — no assert and no skill context`)
+        continue
+      }
+
+      const runMode = resolveRunMode(eval_, file)
+      const resolvedSkills = resolveSkills(eval_, file)
+      const timeout = resolveTimeout(eval_, file)
+      const model = resolveModel(eval_, file, defaultModel)
+
+      const shouldRunBase = runMode === 'all' || runMode === 'current-only'
+      const shouldRunVariants = runMode === 'all' || runMode === 'variants-only'
+
+      if (shouldRunBase) {
+        if (!variantFilter || globMatch(variantFilter, 'base')) {
+          const decoys = mergeDecoys(undefined, eval_.decoys)
+          const skillList = buildSkillList(allSkills, resolvedSkills, decoys)
+          items.push({ eval_, skillList, variantName: 'base', skillName, timeout, assert, model })
+        }
+      }
+
+      if (shouldRunVariants) {
+        const variants = resolveVariants(eval_, file.variants)
+        for (const variant of variants) {
+          if (variantFilter && !globMatch(variantFilter, variant.name)) continue
+          const decoys = mergeDecoys(variant.decoys, eval_.decoys)
+          const baseSkillList = buildSkillList(allSkills, resolvedSkills, decoys)
+          const skillList = applyVariantToSkillList(baseSkillList, assert, variant)
+          items.push({
+            eval_,
+            skillList,
+            variantName: variant.name,
+            skillName,
+            timeout,
+            assert,
+            model,
+          })
+        }
+      }
+    }
+  }
+
+  return items
 }
 
 export async function runSingleEval(
-  eval_: SelectionEval,
-  skillList: Array<{ name: string; description: string }>,
-  variantName: string,
-  evalSkillName: string | null,
+  item: WorkItem,
   runIndex: number,
   totalRuns: number,
   options: Pick<SelectionRunnerOptions, 'evaluator' | 'signal' | 'onProgress' | 'onEvent'>,
 ): Promise<EvalResult> {
   const { evaluator, signal, onProgress, onEvent } = options
+  const { eval_, skillList, variantName, skillName, timeout, assert, model } = item
+  const serialized = serializeAssert(assert)
   const start = performance.now()
 
   onProgress?.({
@@ -134,26 +249,26 @@ export async function runSingleEval(
     status: 'start',
     setup: {
       prompt: eval_.prompt,
-      expected: eval_.selection.expect,
+      expected: serialized,
       skills: skillList,
-      timeoutMs: eval_.timeout_seconds * 1000,
+      timeoutMs: timeout * 1000,
     },
   })
 
   try {
-    const expected = eval_.selection.expect
-    const canBailEarly = expected !== 'none' && expected !== 'any'
+    const canBailEarly = assert !== 'none' && assert !== 'any'
 
     const result = await evaluator.runSelection({
       prompt: eval_.prompt,
       skills: skillList,
-      timeout: eval_.timeout_seconds * 1000,
+      timeout: timeout * 1000,
+      model,
       onEvent,
       signal,
       earlyBailout: canBailEarly,
     })
     const durationMs = performance.now() - start
-    const passed = evaluateResult(eval_.selection.expect, result)
+    const passed = evaluateResult(assert, result)
 
     onProgress?.({
       runIndex,
@@ -171,11 +286,11 @@ export async function runSingleEval(
     return {
       eval: eval_.name,
       passed,
-      expected: eval_.selection.expect,
+      expected: serialized,
       actual: { loaded: result.loaded, skillName: result.skillName },
       durationMs,
       variant: variantName === 'base' ? undefined : variantName,
-      evalSkillName,
+      evalSkillName: skillName,
     }
   } catch (err) {
     const durationMs = performance.now() - start
@@ -199,52 +314,14 @@ export async function runSingleEval(
     return {
       eval: eval_.name,
       passed: false,
-      expected: eval_.selection.expect,
+      expected: serialized,
       actual: { loaded: false, skillName: null },
       durationMs,
       variant: variantName === 'base' ? undefined : variantName,
-      evalSkillName,
+      evalSkillName: skillName,
       error,
     }
   }
-}
-
-export interface WorkItem {
-  eval_: SelectionEval
-  skillList: Array<{ name: string; description: string }>
-  variantName: string
-  skillName: string | null
-}
-
-function shouldRunBase(eval_: SelectionEval, variantFilter?: string): boolean {
-  if (variantFilter && !globMatch(variantFilter, 'base')) return false
-  const variantConfig = eval_.config?.variants ?? 'all'
-  return variantConfig !== 'variant-only'
-}
-
-export function buildWorkItems(options: SelectionRunnerOptions): WorkItem[] {
-  const { skills, evals, skillVariants, variantFilter } = options
-  const items: WorkItem[] = []
-
-  for (const { eval: eval_, skillName } of evals) {
-    const baseSkillList = buildSkillList(skills, eval_)
-    const expected = eval_.selection.expect
-
-    if (shouldRunBase(eval_, variantFilter)) {
-      items.push({ eval_, skillList: baseSkillList, variantName: 'base', skillName })
-    }
-
-    if (expected === 'none' || expected === 'any') continue
-
-    const variants = resolveVariants(eval_, skillVariants, skillName)
-    for (const variant of variants) {
-      if (variantFilter && !globMatch(variantFilter, variant.name)) continue
-      const variantSkillList = applyVariantToSkillList(baseSkillList, expected, variant)
-      items.push({ eval_, skillList: variantSkillList, variantName: variant.name, skillName })
-    }
-  }
-
-  return items
 }
 
 export async function runSelectionEvals(options: SelectionRunnerOptions): Promise<EvalResult[]> {
@@ -256,16 +333,7 @@ export async function runSelectionEvals(options: SelectionRunnerOptions): Promis
   if (parallelism <= 1) {
     for (let i = 0; i < items.length; i++) {
       if (signal?.aborted) break
-      const item = items[i]
-      results[i] = await runSingleEval(
-        item.eval_,
-        item.skillList,
-        item.variantName,
-        item.skillName,
-        i,
-        totalRuns,
-        options,
-      )
+      results[i] = await runSingleEval(items[i], i, totalRuns, options)
     }
   } else {
     let nextIndex = 0
@@ -274,16 +342,7 @@ export async function runSelectionEvals(options: SelectionRunnerOptions): Promis
       while (nextIndex < items.length) {
         if (signal?.aborted) break
         const idx = nextIndex++
-        const item = items[idx]
-        results[idx] = await runSingleEval(
-          item.eval_,
-          item.skillList,
-          item.variantName,
-          item.skillName,
-          idx,
-          totalRuns,
-          options,
-        )
+        results[idx] = await runSingleEval(items[idx], idx, totalRuns, options)
       }
     }
 

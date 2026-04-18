@@ -1,0 +1,22 @@
+variants:
+  - name: concise
+    value: Write and optimize SQL queries across all major database dialects.
+
+  - name: verbose
+    value: >
+      Write correct, performant SQL across all major data warehouse and database
+      dialects including Snowflake, BigQuery, Databricks, PostgreSQL, MySQL, and
+      SQL Server. Use this skill when writing new queries, optimizing slow SQL,
+      translating between dialects, or building complex analytical queries with
+      CTEs, window functions, joins, subqueries, and aggregations.
+
+evals:
+  - name: should-select-sql-queries
+    prompt: "I need to write a query that finds the top 10 customers by revenue with a running total using a window function."
+
+  - name: should-not-select-sql-queries
+    prompt: "Help me configure my Nginx reverse proxy for load balancing."
+    assert: none
+
+  - name: ambiguous-data-request
+    prompt: "I have a CSV file with customer data and I need to find duplicates and clean it up."

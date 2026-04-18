@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { stringify as toYaml } from 'yaml'
 import { runCommand } from '../../src/commands/run.js'
 
 vi.mock('../../src/providers/copilot/evaluator.js', () => ({
@@ -16,12 +17,7 @@ vi.mock('../../src/utils/run-id.js', () => ({
   generateRunId: vi.fn().mockReturnValue('test-run-id'),
 }))
 
-async function createSkillAndEval(
-  tmpDir: string,
-  skillName: string,
-  evalType: string,
-  expect_: string,
-): Promise<void> {
+async function createSkillAndEval(tmpDir: string, skillName: string): Promise<void> {
   await writeFile(path.join(tmpDir, 'dojo.toml'), `[skills]\ndir = ["skills/"]\n`)
   const skillDir = path.join(tmpDir, 'skills', skillName)
   await mkdir(skillDir, { recursive: true })
@@ -32,8 +28,10 @@ async function createSkillAndEval(
   const evalDir = path.join(skillDir, 'evals')
   await mkdir(evalDir, { recursive: true })
   await writeFile(
-    path.join(evalDir, 'test.yaml'),
-    `name: test-eval\ntype: ${evalType}\nprompt: Pick a skill\nselection:\n  expect: ${expect_}\n  available:\n    - ${skillName}\n`,
+    path.join(evalDir, 'selection.yaml'),
+    toYaml({
+      evals: [{ name: 'test-eval', prompt: 'Pick a skill', assert: [skillName] }],
+    }),
   )
 }
 
@@ -56,7 +54,7 @@ describe('runCommand', () => {
   })
 
   it('runs evals and writes report JSON', async () => {
-    await createSkillAndEval(tmpDir, 'my-skill', 'selection', 'my-skill')
+    await createSkillAndEval(tmpDir, 'my-skill')
 
     await runCommand(undefined, {})
 
@@ -79,22 +77,13 @@ describe('runCommand', () => {
   })
 
   it('writes combined report when --output is provided', async () => {
-    await createSkillAndEval(tmpDir, 'my-skill', 'selection', 'my-skill')
+    await createSkillAndEval(tmpDir, 'my-skill')
     const outputPath = path.join(tmpDir, 'combined.json')
 
     await runCommand(undefined, { output: outputPath })
 
     const combined = JSON.parse(await readFile(outputPath, 'utf-8'))
     expect(combined.results).toHaveLength(1)
-  })
-
-  it('filters by --type', async () => {
-    await createSkillAndEval(tmpDir, 'my-skill', 'selection', 'my-skill')
-
-    await runCommand(undefined, { type: 'nonexistent' })
-
-    const output = stderrSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n')
-    expect(output).toContain('No evals found')
   })
 
   it('prints message when no evals found', async () => {
@@ -107,7 +96,7 @@ describe('runCommand', () => {
   })
 
   it('filters evals by skill name', async () => {
-    await createSkillAndEval(tmpDir, 'my-skill', 'selection', 'my-skill')
+    await createSkillAndEval(tmpDir, 'my-skill')
 
     await runCommand('my-skill', {})
 
@@ -126,7 +115,7 @@ describe('runCommand', () => {
   })
 
   it('prints no evals when skill filter matches nothing', async () => {
-    await createSkillAndEval(tmpDir, 'my-skill', 'selection', 'my-skill')
+    await createSkillAndEval(tmpDir, 'my-skill')
 
     await runCommand('nonexistent', {})
 

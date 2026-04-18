@@ -1,133 +1,167 @@
 import { describe, expect, it } from 'vitest'
-import { EvalSchema, SelectionEvalSchema } from '../../src/schemas/eval.js'
+import {
+  DecoySchema,
+  SelectionEvalSchema,
+  SelectionFileSchema,
+  VariantSchema,
+} from '../../src/schemas/eval.js'
+
+describe('DecoySchema', () => {
+  it('defaults enabled to true', () => {
+    const result = DecoySchema.parse({ name: 'fake', value: 'A decoy' })
+    expect(result.enabled).toBe(true)
+  })
+})
+
+describe('VariantSchema', () => {
+  it('parses valid variant with defaults', () => {
+    const result = VariantSchema.parse({ name: 'v1', value: 'content' })
+    expect(result.enabled).toBe(true)
+  })
+
+  it('rejects empty name', () => {
+    expect(() => VariantSchema.parse({ name: '', value: 'content' })).toThrow()
+  })
+
+  it('rejects empty value', () => {
+    expect(() => VariantSchema.parse({ name: 'v1', value: '' })).toThrow()
+  })
+
+  it('accepts decoys', () => {
+    const result = VariantSchema.parse({
+      name: 'v1',
+      value: 'content',
+      decoys: [{ name: 'fake', value: 'decoy value' }],
+    })
+    expect(result.decoys).toHaveLength(1)
+  })
+})
 
 describe('SelectionEvalSchema', () => {
   const validEval = {
     name: 'test eval',
-    type: 'selection' as const,
     prompt: 'Pick the right skill',
-    selection: {
-      expect: 'my-skill',
-      available: ['my-skill', 'other-skill'],
-    },
   }
 
   it('parses valid eval', () => {
     const result = SelectionEvalSchema.parse(validEval)
     expect(result.name).toBe('test eval')
-    expect(result.timeout_seconds).toBe(30)
   })
 
-  it('accepts custom timeout', () => {
-    const result = SelectionEvalSchema.parse({ ...validEval, timeout_seconds: 60 })
-    expect(result.timeout_seconds).toBe(60)
+  it('defaults enabled to true', () => {
+    const result = SelectionEvalSchema.parse(validEval)
+    expect(result.enabled).toBe(true)
   })
 
-  it('accepts "all" for available', () => {
+  it('defaults variants to all', () => {
+    const result = SelectionEvalSchema.parse(validEval)
+    expect(result.variants).toBe('all')
+  })
+
+  it('accepts assert mode "none"', () => {
+    const result = SelectionEvalSchema.parse({ ...validEval, assert: 'none' })
+    expect(result.assert).toBe('none')
+  })
+
+  it('accepts assert mode "any"', () => {
+    const result = SelectionEvalSchema.parse({ ...validEval, assert: 'any' })
+    expect(result.assert).toBe('any')
+  })
+
+  it('accepts assert as string array', () => {
+    const result = SelectionEvalSchema.parse({ ...validEval, assert: ['skill-a', 'skill-b'] })
+    expect(result.assert).toEqual(['skill-a', 'skill-b'])
+  })
+
+  it('accepts decoys with value field', () => {
     const result = SelectionEvalSchema.parse({
       ...validEval,
-      selection: { expect: 'my-skill', available: 'all' },
+      decoys: [{ name: 'fake', value: 'A decoy skill' }],
     })
-    expect(result.selection.available).toBe('all')
+    expect(result.decoys).toHaveLength(1)
   })
 
-  it('accepts "none" as expect value', () => {
-    const result = SelectionEvalSchema.parse({
-      ...validEval,
-      selection: { expect: 'none', available: 'all' },
-    })
-    expect(result.selection.expect).toBe('none')
+  it('accepts skills as "all"', () => {
+    const result = SelectionEvalSchema.parse({ ...validEval, skills: 'all' })
+    expect(result.skills).toBe('all')
   })
 
-  it('accepts "any" as expect value', () => {
-    const result = SelectionEvalSchema.parse({
-      ...validEval,
-      selection: { expect: 'any', available: 'all' },
-    })
-    expect(result.selection.expect).toBe('any')
+  it('accepts skills as string array', () => {
+    const result = SelectionEvalSchema.parse({ ...validEval, skills: ['s1', 's2'] })
+    expect(result.skills).toEqual(['s1', 's2'])
   })
 
-  it('accepts decoys', () => {
-    const result = SelectionEvalSchema.parse({
-      ...validEval,
-      selection: {
-        ...validEval.selection,
-        decoys: [{ name: 'fake', description: 'A decoy skill' }],
-      },
-    })
-    expect(result.selection.decoys).toHaveLength(1)
+  it('accepts run-mode', () => {
+    const result = SelectionEvalSchema.parse({ ...validEval, 'run-mode': 'variants-only' })
+    expect(result['run-mode']).toBe('variants-only')
+  })
+
+  it('rejects missing name', () => {
+    expect(() => SelectionEvalSchema.parse({ prompt: 'Pick one' })).toThrow()
   })
 
   it('rejects missing prompt', () => {
-    const { prompt: _, ...noPrompt } = validEval
-    expect(() => SelectionEvalSchema.parse(noPrompt)).toThrow()
+    expect(() => SelectionEvalSchema.parse({ name: 'test' })).toThrow()
   })
 
-  it('rejects missing selection', () => {
-    const { selection: _, ...noSelection } = validEval
-    expect(() => SelectionEvalSchema.parse(noSelection)).toThrow()
+  it('accepts inline variants', () => {
+    const result = SelectionEvalSchema.parse({
+      ...validEval,
+      variants: [{ name: 'v1', value: 'content' }],
+    })
+    expect(result.variants).toHaveLength(1)
+  })
+
+  it('accepts variant name refs', () => {
+    const result = SelectionEvalSchema.parse({
+      ...validEval,
+      variants: ['variant-a', 'variant-b'],
+    })
+    expect(result.variants).toEqual(['variant-a', 'variant-b'])
   })
 })
 
-describe('EvalSchema', () => {
-  it('parses selection type via discriminated union', () => {
-    const result = EvalSchema.parse({
-      name: 'test',
-      type: 'selection',
-      prompt: 'Pick one',
-      selection: { expect: 'my-skill', available: 'all' },
-    })
-    expect(result.type).toBe('selection')
+describe('SelectionFileSchema', () => {
+  const validFile = {
+    evals: [{ name: 'test-eval', prompt: 'Pick the right skill' }],
+  }
+
+  it('parses valid file', () => {
+    const result = SelectionFileSchema.parse(validFile)
+    expect(result.evals).toHaveLength(1)
   })
 
-  it('rejects unknown type', () => {
-    expect(() =>
-      EvalSchema.parse({
-        name: 'test',
-        type: 'unknown',
-        prompt: 'Pick one',
-      }),
-    ).toThrow()
+  it('defaults timeout to 30', () => {
+    const result = SelectionFileSchema.parse(validFile)
+    expect(result.timeout).toBe(30)
   })
 
-  it('accepts eval with inline variants', () => {
-    const result = EvalSchema.parse({
-      name: 'test',
-      type: 'selection',
-      prompt: 'Pick one',
-      selection: { expect: 'my-skill', available: 'all' },
-      variants: [{ name: 'concise', description: 'Short version' }],
-    })
-    expect(result.type).toBe('selection')
-    if (result.type === 'selection') {
-      expect(result.variants).toHaveLength(1)
-      expect(result.variants![0].enabled).toBe(true)
-    }
+  it('defaults skills to all', () => {
+    const result = SelectionFileSchema.parse(validFile)
+    expect(result.skills).toBe('all')
   })
 
-  it('accepts eval with config.variants', () => {
-    const result = EvalSchema.parse({
-      name: 'test',
-      type: 'selection',
-      prompt: 'Pick one',
-      selection: { expect: 'my-skill', available: 'all' },
-      config: { variants: 'disabled' },
-    })
-    if (result.type === 'selection') {
-      expect(result.config?.variants).toBe('disabled')
-    }
+  it('defaults run-mode to all', () => {
+    const result = SelectionFileSchema.parse(validFile)
+    expect(result['run-mode']).toBe('all')
   })
 
-  it('defaults config.variants to all', () => {
-    const result = EvalSchema.parse({
-      name: 'test',
-      type: 'selection',
-      prompt: 'Pick one',
-      selection: { expect: 'my-skill', available: 'all' },
-      config: {},
+  it('accepts top-level variants with decoys', () => {
+    const result = SelectionFileSchema.parse({
+      ...validFile,
+      variants: [
+        {
+          name: 'v1',
+          value: 'content',
+          decoys: [{ name: 'fake', value: 'decoy' }],
+        },
+      ],
     })
-    if (result.type === 'selection') {
-      expect(result.config?.variants).toBe('all')
-    }
+    expect(result.variants).toHaveLength(1)
+    expect(result.variants![0].decoys).toHaveLength(1)
+  })
+
+  it('requires evals array', () => {
+    expect(() => SelectionFileSchema.parse({})).toThrow()
   })
 })

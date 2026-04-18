@@ -1,27 +1,30 @@
-import { readFile, readdir } from 'node:fs/promises'
+import { readFile, access } from 'node:fs/promises'
 import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { EvalValidationError } from '../errors.js'
-import { EvalSchema } from '../schemas/eval.js'
-import type { DiscoveredEval, DiscoveredSkill } from '../types.js'
+import { SelectionFileSchema } from '../schemas/eval.js'
+import type { DiscoveredSelectionFile, DiscoveredSkill } from '../types.js'
 
-async function listYamlFiles(dir: string): Promise<string[]> {
-  let entries: string[]
-  try {
-    entries = await readdir(dir)
-  } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      return []
+const SELECTION_FILENAMES = ['selection.yaml', 'selection.yml'] as const
+
+async function findSelectionFile(evalsDir: string): Promise<string | null> {
+  for (const name of SELECTION_FILENAMES) {
+    const filePath = path.join(evalsDir, name)
+    try {
+      await access(filePath)
+      return filePath
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') continue
+      throw error
     }
-    throw error
   }
-  return entries.filter(f => f.endsWith('.yaml') || f.endsWith('.yml')).map(f => path.join(dir, f))
+  return null
 }
 
-async function loadEvalsFromFile(
+async function loadSelectionFile(
   filePath: string,
   skillName: string | null,
-): Promise<DiscoveredEval[]> {
+): Promise<DiscoveredSelectionFile> {
   const raw = await readFile(filePath, 'utf-8')
 
   let parsed: unknown
@@ -35,48 +38,37 @@ async function loadEvalsFromFile(
     )
   }
 
-  if (parsed == null) return []
-
-  const items = Array.isArray(parsed) ? (parsed as unknown[]) : [parsed]
-
-  return items.map(item => {
-    try {
-      const eval_ = EvalSchema.parse(item)
-      return { filePath, eval: eval_, skillName }
-    } catch (cause) {
-      throw new EvalValidationError(
-        `Invalid eval in ${filePath}: ${cause instanceof Error ? cause.message : String(cause)}`,
-        filePath,
-        { cause },
-      )
-    }
-  })
+  try {
+    const file = SelectionFileSchema.parse(parsed)
+    return { filePath, skillName, file }
+  } catch (cause) {
+    throw new EvalValidationError(
+      `Invalid selection file ${filePath}: ${cause instanceof Error ? cause.message : String(cause)}`,
+      filePath,
+      { cause },
+    )
+  }
 }
 
-export async function discoverEvals(
+export async function discoverSelectionFiles(
   configDir: string,
   skills: readonly DiscoveredSkill[],
-): Promise<DiscoveredEval[]> {
-  const skillEvalDirs = skills.map(s => ({
-    dir: path.join(s.dirPath, 'evals'),
-    skillName: s.name as string | null,
-  }))
-  const rootDir = {
-    dir: path.join(configDir, 'evals'),
-    skillName: null as string | null,
-  }
-  const allDirs = [...skillEvalDirs, rootDir]
+): Promise<DiscoveredSelectionFile[]> {
+  const candidates: Array<{ evalsDir: string; skillName: string | null }> = [
+    ...skills.map(s => ({
+      evalsDir: path.join(s.dirPath, 'evals'),
+      skillName: s.name,
+    })),
+    { evalsDir: path.join(configDir, 'evals'), skillName: null },
+  ]
 
-  const fileLists = await Promise.all(
-    allDirs.map(async ({ dir, skillName }) => {
-      const files = await listYamlFiles(dir)
-      return files.map(f => ({ filePath: f, skillName }))
+  const found = await Promise.all(
+    candidates.map(async ({ evalsDir, skillName }) => {
+      const filePath = await findSelectionFile(evalsDir)
+      if (!filePath) return null
+      return loadSelectionFile(filePath, skillName)
     }),
   )
-  const allFiles = fileLists.flat()
 
-  const results = await Promise.all(
-    allFiles.map(({ filePath, skillName }) => loadEvalsFromFile(filePath, skillName)),
-  )
-  return results.flat()
+  return found.filter((r): r is DiscoveredSelectionFile => r !== null)
 }

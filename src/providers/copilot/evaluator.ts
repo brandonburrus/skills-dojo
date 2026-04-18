@@ -81,6 +81,7 @@ export class CopilotEvaluator implements Evaluator {
         },
         tools: [loadSkillTool as Tool],
         streaming: true,
+        ...(options.model && { model: options.model }),
       })
 
       sessionRef = session

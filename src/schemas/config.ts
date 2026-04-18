@@ -17,8 +17,8 @@ const SkillsSectionSchema = z.object({
 
 const ModelSectionSchema = z.object({
   provider: z.string().default('copilot'),
-  evaluator: z.string().default('gpt-4o-mini'),
-  judge: z.string().default('gpt-4o-mini'),
+  evaluator: z.string().optional(),
+  judge: z.string().optional(),
 })
 
 const ReportingSectionSchema = z.object({

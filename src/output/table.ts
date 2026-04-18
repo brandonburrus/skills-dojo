@@ -1,5 +1,6 @@
 import type { RunReport } from '../types.js'
 import { createTable, statusLabel } from './cli.js'
+import chalk from 'chalk'
 
 type EvalResult = RunReport['results'][number]
 
@@ -47,7 +48,7 @@ function formatVariantMatrix(report: RunReport): string {
 }
 
 export function formatRunReport(report: RunReport): string {
-  const header = `Skill: ${report.skill}`
+  const header = `Skill: ${chalk.bold.blueBright(report.skill)}`
   const hasVariants = report.results.some(r => r.variant !== undefined)
   const body = hasVariants ? formatVariantMatrix(report) : formatFlatReport(report)
   return `${header}\n${body}`

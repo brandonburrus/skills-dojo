@@ -8,6 +8,7 @@ export interface SelectionRunOptions {
   prompt: string
   skills: Array<{ name: string; description: string }>
   timeout: number
+  model?: string
   onEvent?: (event: { type: string; [key: string]: unknown }) => void
   signal?: AbortSignal
   /** When set, abort the session as soon as any skill is loaded (skips remaining agent turns). */

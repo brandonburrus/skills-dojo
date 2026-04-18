@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { stringify as toYaml } from 'yaml'
 import { validateCommand } from '../../src/commands/validate.js'
 
 describe('validateCommand', () => {
@@ -57,8 +58,10 @@ describe('validateCommand', () => {
     const evalDir = path.join(skillDir, 'evals')
     await mkdir(evalDir, { recursive: true })
     await writeFile(
-      path.join(evalDir, 'test.yaml'),
-      'name: test-eval\ntype: selection\nprompt: Pick a skill\nselection:\n  expect: my-skill\n  available:\n    - my-skill\n',
+      path.join(evalDir, 'selection.yaml'),
+      toYaml({
+        evals: [{ name: 'test-eval', prompt: 'Pick a skill', assert: ['my-skill'] }],
+      }),
     )
 
     await validateCommand()

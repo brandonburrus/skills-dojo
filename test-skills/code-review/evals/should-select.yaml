@@ -1,6 +1,0 @@
-name: should-select-code-review
-type: selection
-prompt: "Review this pull request for potential security issues and suggest improvements."
-selection:
-  expect: code-review
-  available: all
