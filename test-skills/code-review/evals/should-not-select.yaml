@@ -1,0 +1,6 @@
+name: should-not-select-code-review
+type: selection
+prompt: "Write a Python function that calculates the Fibonacci sequence."
+selection:
+  expect: none
+  available: all

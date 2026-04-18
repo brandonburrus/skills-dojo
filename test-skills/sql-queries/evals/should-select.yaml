@@ -1,0 +1,6 @@
+name: should-select-sql-queries
+type: selection
+prompt: "I need to write a query that finds the top 10 customers by revenue with a running total using a window function."
+selection:
+  expect: sql-queries
+  available: all

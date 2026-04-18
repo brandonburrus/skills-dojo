@@ -1,36 +1,40 @@
 {
-  "name": "copilot-dojo",
-  "version": "1.0.0",
-  "description": "",
+  "name": "skills-dojo",
+  "version": "0.1.0",
+  "description": "Toolkit for testing and evaluating AI agent skills",
   "author": "Brandon Burrus <brandon@burrus.io>",
   "license": "MIT",
   "type": "module",
-  "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
+  },
+  "bin": {
+    "dojo": "./dist/index.js"
   },
   "files": [
     "dist"
   ],
-  "homepage": "https://github.com/brandonburrus/copilot-dojo#readme",
-  "keywords": [],
+  "homepage": "https://github.com/brandonburrus/skills-dojo#readme",
+  "keywords": [
+    "ai",
+    "agent",
+    "skills",
+    "evaluation",
+    "testing",
+    "cli",
+    "agentskills"
+  ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/brandonburrus/copilot-dojo.git"
+    "url": "git+https://github.com/brandonburrus/skills-dojo.git"
   },
   "bugs": {
-    "url": "https://github.com/brandonburrus/copilot-dojo/issues"
+    "url": "https://github.com/brandonburrus/skills-dojo/issues"
   },
   "scripts": {
     "build": "tsup",
@@ -40,7 +44,11 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check --fix .",
     "check": "npm run typecheck && npm run lint && npm run test",
+    "prepublishOnly": "npm run check && npm run build",
     "prepare": "husky"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "@anthropic-ai/sandbox-runtime": "^0.0.49",
@@ -54,7 +62,11 @@
     "figlet": "^1.11.0",
     "figures": "^6.1.0",
     "js-tiktoken": "^1.0.21",
+    "ms": "^2.1.3",
+    "ora": "^9.3.0",
+    "pino": "^10.3.1",
     "smol-toml": "^1.6.1",
+    "yaml": "^2.8.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -62,6 +74,7 @@
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
     "@types/node": "^25.6.0",
+    "@types/pino": "^7.0.4",
     "@vitest/coverage-v8": "^4.1.4",
     "husky": "^9.1.7",
     "tsup": "^8.5.1",

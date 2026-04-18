@@ -1,0 +1,6 @@
+name: should-not-select-sql-queries
+type: selection
+prompt: "Help me configure my Nginx reverse proxy for load balancing."
+selection:
+  expect: none
+  available: all
