@@ -1,0 +1,92 @@
+---
+title: Quick Start
+description: Install Dojo, create a skill, write an eval, and run it.
+---
+
+import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+<Steps>
+
+1. **Install Dojo**
+
+   ```bash
+   npm install -g skills-dojo
+   ```
+
+2. **Create a skill**
+
+   A skill is a directory containing a `SKILL.md` file. The file uses YAML frontmatter to define the skill's identity, followed by Markdown instructions for the agent.
+
+   Create `skills/sql-queries/SKILL.md`:
+
+   ```markdown
+   ---
+   name: sql-queries
+   description: >-
+     Write correct, performant SQL across major data warehouse dialects.
+     Use when writing queries, optimizing slow SQL, or translating between dialects.
+   ---
+
+   # SQL Queries
+
+   When loaded, write SQL that follows these conventions:
+   - Use CTEs over nested subqueries
+   - Always qualify column names with table aliases
+   - Prefer explicit JOIN syntax over implicit joins
+   ```
+
+   The `name` field must be lowercase alphanumeric with hyphens (e.g. `sql-queries`, `code-review`). The `description` tells the agent when to select this skill.
+
+   <Aside type="tip">
+   Dojo discovers skills by scanning for `SKILL.md` files in several default directories: `skills/`, `.agents/skills/`, `.github/skills/`, and others. You can override this in `dojo.toml`.
+   </Aside>
+
+3. **Write an eval**
+
+   Create `skills/sql-queries/evals/selection.yaml`:
+
+   ```yaml
+   timeout: 30
+   skills: all
+
+   evals:
+     - name: basic-select
+       prompt: "Write a SQL query to get all users who signed up in the last 30 days"
+       assert:
+         - sql-queries
+
+     - name: not-sql
+       prompt: "Write a Python script to parse a CSV file"
+       assert: none
+   ```
+
+   The first eval checks that the agent selects `sql-queries` for a SQL-related prompt. The second checks that it does **not** select any skill for an unrelated prompt.
+
+
+4. **Run the evals**
+
+   <Aside type="caution">
+   Dojo currently requires GitHub Copilot access. Make sure you have an active Copilot subscription and are authenticated before running evals.
+   </Aside>
+
+   ```bash
+   dojo run
+   ```
+
+   Dojo runs each eval against the configured model provider (Copilot by default), shows pass/fail results, and writes a JSON report to `skills/sql-queries/evals/reports/<run-id>/report.json`.
+
+   ![Example output from a dojo run](/skills-dojo/example.png)
+
+   To run evals for a specific skill:
+
+   ```bash
+   dojo run sql-queries
+   ```
+
+   To run a specific eval by name:
+
+   ```bash
+   dojo run --eval basic-select
+   ```
+</Steps>
+

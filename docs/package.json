@@ -1,0 +1,23 @@
+{
+  "name": "dojo-docs",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "generate": "tsx scripts/generate-references.ts"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.38.3",
+    "astro": "^6.1.8",
+    "sharp": "^0.34.5",
+    "starlight-theme-flexoki": "^0.2.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.4",
+    "zod": "^3.25.0"
+  }
+}

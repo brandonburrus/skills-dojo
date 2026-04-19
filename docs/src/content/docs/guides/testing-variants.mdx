@@ -1,0 +1,167 @@
+---
+title: Testing Variants
+description: Use variants to test whether an agent selects a skill even when its description changes.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A variant is an alternative description for a skill. When Dojo runs a variant, it replaces the asserted skill's description in the selection pool with the variant's `value`, then checks whether the agent still selects the correct skill. This tests robustness -- does the agent recognize the skill regardless of how it's described?
+
+## Why variants matter
+
+A skill description is the primary signal an agent uses to decide whether to load it. If your description is too narrow, the agent might miss valid use cases. If it's too generic, it might get selected for unrelated prompts.
+
+Variants let you systematically test multiple descriptions against the same set of prompts without duplicating eval definitions.
+
+## Defining variants
+
+Variants are defined at the file level in your eval YAML:
+
+```yaml
+timeout: 30
+skills: all
+
+variants:
+  - name: concise
+    value: "Write SQL queries for any database dialect"
+  - name: verbose
+    value: >-
+      Write correct, performant SQL across all major data warehouse dialects
+      including Snowflake, BigQuery, Databricks, and PostgreSQL. Handle CTEs,
+      window functions, aggregations, and query optimization.
+  - name: task-focused
+    value: "Use when the user needs help writing, debugging, or optimizing SQL"
+
+evals:
+  - name: basic-select
+    prompt: "Write a query to find all users created this month"
+    assert:
+      - sql-queries
+```
+
+Each variant has:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | string | required | Identifier for this variant (1-100 chars) |
+| `value` | string | required | Alternative skill description (1-10000 chars) |
+| `enabled` | boolean | `true` | Set to `false` to skip this variant |
+| `decoys` | array | none | Variant-specific decoys |
+
+When this eval runs, Dojo executes it four times:
+
+1. **`[current]`** -- with the original `SKILL.md` description
+2. **`[variant: concise]`** -- with "Write SQL queries for any database dialect"
+3. **`[variant: verbose]`** -- with the long-form description
+4. **`[variant: task-focused]`** -- with "Use when the user needs help..."
+
+Each run is an independent pass/fail result.
+
+## Run modes
+
+The `run-mode` field controls which combinations are executed:
+
+| Mode | Runs `[current]` | Runs variants | Use case |
+|------|-------------------|---------------|----------|
+| `all` (default) | Yes | Yes | Full coverage |
+| `current-only` | Yes | No | Quick check against the real description |
+| `variants-only` | No | Yes | Focus on variant testing |
+
+Set at file level or per-eval:
+
+```yaml
+# File-level default
+run-mode: variants-only
+
+evals:
+  - name: basic-select
+    prompt: "Write a query to find duplicate emails"
+    # Inherits run-mode: variants-only
+
+  - name: negative-case
+    prompt: "Parse this JSON file"
+    run-mode: current-only   # Override for this eval
+    assert: none
+```
+
+## Selecting which variants to run
+
+By default, every eval runs against all enabled variants (`variants: "all"`). You can restrict this per-eval.
+
+### By name reference
+
+Reference file-level variants by name:
+
+```yaml
+variants:
+  - name: concise
+    value: "Write SQL queries"
+  - name: verbose
+    value: "Write correct, performant SQL across all major dialects..."
+
+evals:
+  - name: basic-select
+    prompt: "Write a query to find users"
+    variants:
+      - concise       # only run the "concise" variant
+```
+
+### Inline variants
+
+Define variants directly on an eval instead of referencing file-level ones:
+
+```yaml
+evals:
+  - name: edge-case
+    prompt: "Translate this Snowflake query to BigQuery"
+    variants:
+      - name: dialect-specific
+        value: "Translate SQL between Snowflake and BigQuery dialects"
+```
+
+## Variant-specific decoys
+
+Variants can define their own decoys, which are merged with any eval-level decoys:
+
+```yaml
+variants:
+  - name: with-distractors
+    value: "Write SQL queries"
+    decoys:
+      - name: query-builder
+        value: "Visual drag-and-drop SQL query builder tool"
+      - name: database-admin
+        value: "Manage database schemas, permissions, and backups"
+
+evals:
+  - name: with-noise
+    prompt: "Optimize this slow JOIN query"
+    assert:
+      - sql-queries
+    decoys:
+      - name: performance-tuner
+        value: "General application performance profiling"
+```
+
+When running the `with-distractors` variant for this eval, the selection pool includes the real skills plus all three decoys (two from the variant, one from the eval). If both define a decoy with the same name, the variant's version takes precedence.
+
+## Filtering variants at runtime
+
+Run a specific variant without editing YAML:
+
+```bash
+# Run only the "concise" variant
+dojo run --variant concise
+
+# Run only the base (current) description
+dojo run --variant base
+
+# Combine with skill and eval filters
+dojo run sql-queries --eval basic-select --variant concise
+```
+
+Variant filters support glob patterns.
+
+<Aside type="tip">
+  The `[current]` run uses the variant name `base` internally. Use `--variant base` to run only the current skill description without any variants.
+</Aside>
