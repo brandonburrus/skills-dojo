@@ -2,8 +2,7 @@ import { defineConfig } from 'astro/config'
 import starlight from '@astrojs/starlight'
 import starlightThemeFlexoki from 'starlight-theme-flexoki'
 export default defineConfig({
-  site: 'https://brandonburrus.github.io',
-  base: '/skills-dojo',
+  site: 'https://skillsdojo.dev',
   integrations: [
     starlight({
       title: 'Skills Dojo',
