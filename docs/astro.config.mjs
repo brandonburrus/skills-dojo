@@ -2,6 +2,8 @@ import { defineConfig } from 'astro/config'
 import starlight from '@astrojs/starlight'
 import starlightThemeFlexoki from 'starlight-theme-flexoki'
 export default defineConfig({
+  site: 'https://brandonburrus.github.io',
+  base: '/skills-dojo',
   integrations: [
     starlight({
       title: 'Skills Dojo',
@@ -22,6 +24,9 @@ export default defineConfig({
       },
       customCss: ['./src/styles/custom.css'],
       plugins: [starlightThemeFlexoki()],
+      components: {
+        Footer: './src/components/Footer.astro',
+      },
       expressiveCode: {
         themes: ['one-dark-pro'],
       },
