@@ -1,15 +1,15 @@
 ---
-title: ''
+title: Toolkit for testing, evaluating, and improving AI agent skills
 template: splash
 hero:
   title: Skills Dojo
   tagline: Toolkit for testing, evaluating, and improving AI agent skills
   actions:
     - text: Quick Start
-      link: /guides/quick-start/
+      link: /skills-dojo/guides/quick-start/
       icon: right-arrow
     - text: GitHub
-      link: https://github.com
+      link: https://github.com/brandonburrus/skills-dojo
       icon: external
       variant: secondary
 ---
@@ -37,7 +37,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 ## What is Skills Dojo?
 
-At it's base, Dojo is simply a CLI that automates away the annoying parts of running agent skills evaluations. Define your evals for every skill as a simple YAML file, and Dojo will handle the rest: presenting the prompt and skill options to your evaluator model, checking the results against your assertions, and saving detailed reports for analysis.
+At its base, Dojo is simply a CLI that automates away the annoying parts of running agent skills evaluations. Define your evals for every skill as a simple YAML file, and Dojo will handle the rest: presenting the prompt and skill options to your evaluator model, checking the results against your assertions, and saving detailed reports for analysis.
 
 You can describe variants, mimic real-world scenarios with decoys, and even test whether your agent can correctly identify when no skill is needed at all.
 
@@ -45,7 +45,7 @@ Skills Dojo assumes your agent skills follow the [agent skills specification](ht
 
 ## Why Evaluate Skills?
 
-Vercel published an analysis comparing `AGENTS.md` files against Skills, and found that agents tend to under perform when it comes to selection 21% of the time. This means that for roughly 1 in 5 situations when an agent should've loaded the appropriate skill, it didn't. 
+Vercel published an analysis comparing `AGENTS.md` files against Skills, and found that agents tend to underperform when it comes to selection 21% of the time. This means that for roughly 1 in 5 situations when an agent should've loaded the appropriate skill, it didn't. 
 
 However when it comes to encoding the informational and operational context an agent needs for cross-cutting concerns, throwing everything into the `AGENTS.md` file isn't a viable solution.
 

@@ -15,7 +15,7 @@ Schema for skill variants used in selection evals.
 |-------|------|----------|---------|-------------|
 | `name` | `string` | Yes | - | Unique name for this variant. |
 | `value` | `string` | Yes | - | SKILL.md content to use in place of the current skill content. |
-| `enabled` | `boolean` | Yes | `true` | Whether this variant is active. |
+| `enabled` | `boolean` | No | `true` | Whether this variant is active. |
 | `decoys` | `Decoy[]` | No | - | Decoy skills specific to this variant. |
 
 ## Decoy
@@ -26,4 +26,4 @@ Schema for decoy skills that should not be selected.
 |-------|------|----------|---------|-------------|
 | `name` | `string` | Yes | - | Name of the decoy skill. |
 | `value` | `string` | Yes | - | SKILL.md content for the decoy skill. |
-| `enabled` | `boolean` | Yes | `true` | Whether this decoy is active. |
+| `enabled` | `boolean` | No | `true` | Whether this decoy is active. |

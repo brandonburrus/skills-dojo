@@ -65,11 +65,17 @@ import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
 4. **Run the evals**
 
+   <Aside type="caution">
+   Dojo currently requires GitHub Copilot access. Make sure you have an active Copilot subscription and are authenticated before running evals.
+   </Aside>
+
    ```bash
    dojo run
    ```
 
    Dojo runs each eval against the configured model provider (Copilot by default), shows pass/fail results, and writes a JSON report to `skills/sql-queries/evals/reports/<run-id>/report.json`.
+
+   ![Example output from a dojo run](/skills-dojo/example.png)
 
    To run evals for a specific skill:
 

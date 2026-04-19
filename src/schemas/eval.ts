@@ -42,7 +42,7 @@ export const SelectionEvalSchema = z.object({
     .union([z.array(z.string()), z.literal('none'), z.literal('any')])
     .optional()
     .describe(
-      'Expected skill selection. An array of skill names, "none" if no skill should load, or "any" to accept any selection.',
+      'Expected skill selection. An array of skill names, "none" if no skill should load, or "any" to accept any selection. Defaults to the owning skill for skill-scoped evals.',
     ),
   variants: VariantsRefSchema.optional()
     .default('all')

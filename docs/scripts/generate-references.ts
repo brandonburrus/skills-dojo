@@ -116,7 +116,7 @@ function extractFields(jsonSchema: Record<string, unknown>): FieldRow[] {
     rows.push({
       field: `\`${key}\``,
       type: jsonSchemaTypeToString(prop),
-      required: required.has(key),
+      required: required.has(key) && !hasDefault,
       default: defaultVal,
       description,
     })
@@ -374,7 +374,8 @@ const commands: CommandDef[] = [
       { flags: '-o, --output <path>', description: 'Write combined report to file' },
       {
         flags: '-i, --inspect',
-        description: 'Show full session telemetry and streaming output',
+        description:
+          'Show key session events (model, prompt, tool calls, errors). Full event stream is written to logs.json.',
       },
     ],
   },

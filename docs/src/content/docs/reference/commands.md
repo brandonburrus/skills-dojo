@@ -45,7 +45,7 @@ dojo run [skill] [options]
 | `-p, --parallelism <n>` | Max concurrent eval runs | CPU cores |
 | `--no-parallelism` | Run evals sequentially | - |
 | `-o, --output <path>` | Write combined report to file | - |
-| `-i, --inspect` | Show full session telemetry and streaming output | - |
+| `-i, --inspect` | Show key session events (model, prompt, tool calls, errors). Full event stream is written to logs.json. | - |
 ### `dojo list` (alias: `ls`)
 
 List all discovered skills and evals in a tabular format.
