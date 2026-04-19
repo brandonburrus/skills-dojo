@@ -1,0 +1,37 @@
+:root {
+  --sl-color-accent-low: #2a0a12;
+  --sl-color-accent: #d01947;
+  --sl-color-accent-high: #f5c2ce;
+  --sl-color-text-accent: #d01947;
+}
+
+:root {
+  --sl-sidebar-width: 12rem;
+}
+
+:root[data-theme="light"] {
+  --sl-color-accent-low: #f5c2ce;
+  --sl-color-accent: #d01947;
+  --sl-color-accent-high: #2a0a12;
+  --sl-color-text-accent: #d01947;
+}
+
+.site-title img {
+  max-height: 1.65rem;
+}
+
+.site-title {
+  gap: 0.75rem;
+}
+
+.social-icons a {
+  color: var(--sl-color-white);
+}
+
+.hero .actions {
+  gap: 0.75rem 1rem;
+}
+
+.card .icon {
+  color: #22c55e;
+}

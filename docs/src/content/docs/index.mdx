@@ -1,0 +1,69 @@
+---
+title: ''
+template: splash
+hero:
+  title: Skills Dojo
+  tagline: Toolkit for testing, evaluating, and improving AI agent skills
+  actions:
+    - text: Quick Start
+      link: /guides/quick-start/
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com
+      icon: external
+      variant: secondary
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
+
+## Features
+
+<CardGrid>
+  <Card title="Selection Evals" icon="approve-check-circle">
+    Test whether an agent selects the correct skill for a given scenario.
+  </Card>
+  <Card title="Variants" icon="random">
+    Define alternative descriptions for a skill and evaluate if the agent still selects it.
+  </Card>
+  <Card title="Decoys" icon="seti:bicep">
+    Add fake skills to the selection pool to test skill selection discrimination. 
+  </Card>
+  <Card title="Reporting" icon="list-format">
+    Every run generates a detailed report and logs of the agent's reasoning process for analysis and debugging.
+  </Card>
+</CardGrid>
+
+
+## What is Skills Dojo?
+
+At it's base, Dojo is simply a CLI that automates away the annoying parts of running agent skills evaluations. Define your evals for every skill as a simple YAML file, and Dojo will handle the rest: presenting the prompt and skill options to your evaluator model, checking the results against your assertions, and saving detailed reports for analysis.
+
+You can describe variants, mimic real-world scenarios with decoys, and even test whether your agent can correctly identify when no skill is needed at all.
+
+Skills Dojo assumes your agent skills follow the [agent skills specification](https://agentskills.io/specification).
+
+## Why Evaluate Skills?
+
+Vercel published an analysis comparing `AGENTS.md` files against Skills, and found that agents tend to under perform when it comes to selection 21% of the time. This means that for roughly 1 in 5 situations when an agent should've loaded the appropriate skill, it didn't. 
+
+However when it comes to encoding the informational and operational context an agent needs for cross-cutting concerns, throwing everything into the `AGENTS.md` file isn't a viable solution.
+
+This is where evals come in for the Skills your team is writing: they allow you to test and iterate on the descriptions and instructions for your skills, ensuring that your agent can select the right tool for the job when it matters most.
+
+Vercel Report: [AGENTS.md outperforms skills in our agent evals](https://vercel.com/blog/agents-md-outperforms-skills-in-our-agent-evals)
+
+## How It Works
+
+1. **Define skills** -- Each skill is a directory with a `SKILL.md` file containing frontmatter (name, description) and instructions.
+2. **Write evals** -- YAML files in a skill's `evals/` directory define prompts, variants, and expected outcomes.
+3. **Run** -- Dojo presents the given eval prompt and available skills to an evaluator model in a sandbox environment, and tracks which skills the model selects.
+4. **Assert** -- Dojo checks whether the agent's choice matches your assertion: a specific skill, any skill, or no skill at all.
+5. **Analyze** -- For every eval run, Dojo generates a detailed report and captures model reasoning logs for analysis and debugging. This allows you to understand why an agent made a particular selection and iterate on your skill descriptions and instructions accordingly.
+
+<br />
+
+<Aside type='note' title='Limited Model Support'>
+Skills Dojo is currently in early development, and as of right now only supports GitHub Copilot as the model provider.
+</Aside>
+

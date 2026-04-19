@@ -1,0 +1,48 @@
+---
+title: Setup
+description: Configure Dojo with dojo.toml, CLI flags, and model providers.
+---
+
+## Configuration
+
+Dojo works with zero configuration using sensible defaults. To customize behavior, create a `dojo.toml` in your project root:
+
+```toml
+[skills]
+dir = ["skills", ".agents/skills"]
+
+[model]
+provider = "copilot"
+evaluator = "gpt-4o"
+
+[reporting]
+per-skill = true
+consolidated = false
+```
+
+See the [Config Reference](/reference/config/) for the full schema.
+
+## Global CLI flags
+
+These flags apply to all commands and override `dojo.toml` values:
+
+| Flag | Description |
+|------|-------------|
+| `--cwd <dir>` | Working directory for config and skill discovery |
+| `--skills-dir <dir>` | Override skills directory (repeatable) |
+| `--model-provider <provider>` | Override model provider |
+| `--evaluator-model <model>` | Override evaluator model |
+
+See the [Commands Reference](/reference/commands/) for all available commands and options.
+
+## Model provider
+
+Dojo uses a model provider to power the evaluator agent that runs your evals. Currently, **GitHub Copilot** is the only supported provider. It is used by default and requires no additional configuration beyond having Copilot access.
+
+```toml
+[model]
+provider = "copilot"
+evaluator = "gpt-4o"
+```
+
+The provider abstraction is designed to support additional providers in the future. See [Architecture](/reference/config/#model) for the model configuration options.
