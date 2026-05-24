@@ -25,7 +25,12 @@ src/
   loaders/              Discovery + parsing (config, skills, evals)
   providers/            Evaluator/Judge abstractions + implementations
     types.ts            Evaluator + Judge interfaces
+    factory.ts          createEvaluator(provider) dispatcher
+    shared/             Cross-provider helpers (e.g. SELECTION_SYSTEM_MESSAGE)
     copilot/            Copilot SDK implementation
+    openai/             OpenAI Chat Completions implementation
+    anthropic/          Anthropic Messages API implementation
+    vercel/             Vercel AI SDK implementation (meta-SDK with model routing)
   runner/               Eval execution logic (provider-agnostic)
   output/               CLI output formatting (tables)
   commands/             CLI command handlers (validate, list, run)
@@ -35,7 +40,7 @@ src/
 **Key dependencies:**
 
 - `commander` -- CLI framework
-- `@github/copilot-sdk` -- first evaluator provider implementation
+- `@github/copilot-sdk`, `openai`, `@anthropic-ai/sdk`, `ai`, `@ai-sdk/openai`, `@ai-sdk/anthropic` -- evaluator providers
 - `zod` -- schema validation (v4, import from `zod/v4`)
 - `yaml` -- YAML parsing for evals
 - `smol-toml` -- TOML parsing for optional config
@@ -64,9 +69,20 @@ index -> commands
 
 ### Provider abstraction
 
-Evaluator and Judge are interfaces in `src/providers/types.ts`.
-Copilot SDK is the first concrete implementation. To add a new provider:
-create `src/providers/<name>/evaluator.ts` implementing `Evaluator`.
+Evaluator and Judge are interfaces in `src/providers/types.ts`. Four
+concrete `Evaluator` implementations ship today: Copilot SDK, OpenAI
+Chat Completions, Anthropic Messages API, and Vercel AI SDK. The default
+provider is `anthropic`; switch via `dojo.toml` (`model.provider`) or
+the `--model-provider` CLI flag. OpenAI and Anthropic read their API keys
+from `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` env vars. The Vercel provider
+routes to an underlying provider based on the model string format
+`<provider>/<model-id>` (e.g. `openai/gpt-4o-mini`).
+
+To add a new provider: (1) create `src/providers/<name>/evaluator.ts`
+implementing `Evaluator`, (2) add the literal to the
+`SUPPORTED_PROVIDERS` enum in `src/schemas/config.ts`, and (3) wire
+the dispatch case in `src/providers/factory.ts`. The `Judge` interface
+remains unimplemented across all four providers.
 
 ### Selection eval mechanism
 
@@ -139,9 +155,12 @@ considered, why this choice was made, and when to revisit.
 ### Decisions
 
 - **Provider abstraction over SDK lock-in:** The evaluator and judge
-  are interfaces, not tied to Copilot SDK. This was chosen to make the
-  tool useful beyond just Copilot. Copilot is the first implementation.
-  Revisit if the abstraction becomes leaky.
+  are interfaces, not tied to any single SDK. Copilot was the first
+  implementation; OpenAI Chat Completions and Anthropic Messages API
+  followed (default provider is `anthropic`). The Vercel AI SDK provider
+  adds a meta-SDK path that routes to underlying providers via a
+  `<provider>/<model-id>` model string. Revisit if the abstraction
+  becomes leaky.
 
 - **Selection evals use tool observation:** Instead of asking the agent
   "which skill would you pick?", we register a `load_skill` tool and

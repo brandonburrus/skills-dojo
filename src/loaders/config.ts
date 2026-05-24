@@ -14,13 +14,18 @@ export interface ConfigOverrides {
 
 const CONFIG_FILENAME = 'dojo.toml'
 
+export type ConfigSource = 'file' | 'defaults'
+
+export interface LoadConfigResult {
+  config: DojoConfig
+  configDir: string
+  source: ConfigSource
+}
+
 export async function loadConfig(
   startDir?: string,
   overrides?: ConfigOverrides,
-): Promise<{
-  config: DojoConfig
-  configDir: string
-}> {
+): Promise<LoadConfigResult> {
   const dir = startDir ?? process.cwd()
   const configPath = path.join(dir, CONFIG_FILENAME)
 
@@ -29,7 +34,11 @@ export async function loadConfig(
     raw = await readFile(configPath, 'utf-8')
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      return { config: applyOverrides(DEFAULT_CONFIG, overrides), configDir: dir }
+      return {
+        config: parseConfig(applyOverrides(DEFAULT_CONFIG, overrides), configPath),
+        configDir: dir,
+        source: 'defaults',
+      }
     }
     throw new ConfigValidationError(
       `Failed to read ${configPath}: ${error instanceof Error ? error.message : String(error)}`,
@@ -49,9 +58,17 @@ export async function loadConfig(
     )
   }
 
+  const fileConfig = parseConfig(parsed, configPath)
+  const merged = applyOverrides(fileConfig, overrides)
+  // Re-parse after CLI overrides so flag-injected values (e.g. --model-provider)
+  // are validated by the same schema as values from the TOML file.
+  const config = parseConfig(merged, configPath)
+  return { config, configDir: dir, source: 'file' }
+}
+
+function parseConfig(input: unknown, configPath: string): DojoConfig {
   try {
-    const config = applyOverrides(DojoConfigSchema.parse(parsed), overrides)
-    return { config, configDir: dir }
+    return DojoConfigSchema.parse(input)
   } catch (cause) {
     if (cause instanceof z.ZodError) {
       const issues = cause.issues.map(issue => ({
@@ -64,7 +81,10 @@ export async function loadConfig(
   }
 }
 
-function applyOverrides(config: DojoConfig, overrides?: ConfigOverrides): DojoConfig {
+// Returns `unknown` because CLI overrides may inject values that fail the schema
+// (e.g. an unknown provider string). The caller is expected to feed the result
+// back into `parseConfig` for validation.
+function applyOverrides(config: DojoConfig, overrides?: ConfigOverrides): unknown {
   if (!overrides) return config
 
   return {

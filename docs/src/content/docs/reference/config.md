@@ -14,7 +14,7 @@ Schema for the `dojo.toml` configuration file.
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `skills` | `object` | No | `{"dir":["skills",".agents/skills",".github/skills",".claude/skills",".codex/skills",".gemini/skills",".openclaw/skills",".opencode/skills"]}` | Configuration for skill discovery. |
-| `model` | `object` | No | `{"provider":"copilot"}` | Model provider and model selection for evaluations. |
+| `model` | `object` | No | `{"provider":"anthropic"}` | Model provider and model selection for evaluations. |
 | `reporting` | `object` | No | `{"per-skill":true,"consolidated":false}` | Controls how and where eval reports are written. |
 
 #### `skills` fields
@@ -27,8 +27,8 @@ Schema for the `dojo.toml` configuration file.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `provider` | `string` | No | `"copilot"` | Model provider to use for evaluations. Currently only "copilot" is supported. |
-| `evaluator` | `string` | No | - | Model to use for running evals. Defaults to the provider's default model. |
+| `provider` | `"copilot"` \| `"openai"` \| `"anthropic"` \| `"vercel"` | No | `"anthropic"` | Model provider to use for evaluations. One of: copilot, openai, anthropic, vercel. Defaults to anthropic. |
+| `evaluator` | `string` | No | - | Model to use for running evals. Defaults to the provider's default model. For the vercel provider, use the form "<underlying-provider>/<model-id>" (e.g. "openai/gpt-4o-mini"). |
 | `judge` | `string` | No | - | Model to use for judging eval results. Defaults to the provider's default model. |
 
 #### `reporting` fields

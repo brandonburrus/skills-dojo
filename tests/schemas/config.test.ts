@@ -14,7 +14,7 @@ describe('DojoConfigSchema', () => {
       '.openclaw/skills',
       '.opencode/skills',
     ])
-    expect(result.model.provider).toBe('copilot')
+    expect(result.model.provider).toBe('anthropic')
     expect(result.model.evaluator).toBeUndefined()
     expect(result.model.judge).toBeUndefined()
   })
@@ -24,7 +24,7 @@ describe('DojoConfigSchema', () => {
       model: { judge: 'gpt-4o' },
     })
     expect(result.model.judge).toBe('gpt-4o')
-    expect(result.model.provider).toBe('copilot')
+    expect(result.model.provider).toBe('anthropic')
     expect(result.model.evaluator).toBeUndefined()
   })
 
@@ -46,11 +46,22 @@ describe('DojoConfigSchema', () => {
   })
 
   it('exports DEFAULT_CONFIG', () => {
-    expect(DEFAULT_CONFIG.model.provider).toBe('copilot')
+    expect(DEFAULT_CONFIG.model.provider).toBe('anthropic')
     expect(DEFAULT_CONFIG.model.judge).toBeUndefined()
   })
 
   it('rejects invalid types', () => {
     expect(() => DojoConfigSchema.parse({ skills: { dir: 123 } })).toThrow()
+  })
+
+  it('rejects unknown provider strings', () => {
+    expect(() => DojoConfigSchema.parse({ model: { provider: 'mistral' } })).toThrow()
+  })
+
+  it('accepts each supported provider literal', () => {
+    for (const provider of ['copilot', 'openai', 'anthropic', 'vercel'] as const) {
+      const result = DojoConfigSchema.parse({ model: { provider } })
+      expect(result.model.provider).toBe(provider)
+    }
   })
 })

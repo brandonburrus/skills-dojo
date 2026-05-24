@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { formatRunReport } from '../../src/output/table.js'
 import type { RunReport } from '../../src/types.js'
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional ANSI stripping
+const stripAnsi = (str: string): string => str.replace(/\x1B\[[0-9;]*[A-Za-z]/g, '')
+
 const makeReport = (overrides: Partial<RunReport> = {}): RunReport => ({
   runId: 'abc-123',
   timestamp: '2026-04-17T12:00:00Z',
@@ -33,7 +36,7 @@ const makeReport = (overrides: Partial<RunReport> = {}): RunReport => ({
 
 describe('formatRunReport', () => {
   it('includes PASS and FAIL for mixed results', () => {
-    const output = formatRunReport(makeReport())
+    const output = stripAnsi(formatRunReport(makeReport()))
 
     expect(output).toContain('PASS')
     expect(output).toContain('FAIL')
@@ -88,7 +91,7 @@ describe('formatRunReport', () => {
       results: [],
     })
 
-    const output = formatRunReport(report)
+    const output = stripAnsi(formatRunReport(report))
 
     expect(output).toContain('Skill: my-skill')
   })

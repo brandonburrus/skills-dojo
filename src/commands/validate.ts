@@ -40,10 +40,7 @@ export async function validateCommand(
     const result = await loadConfig(startDir, overrides)
     configDir = result.configDir
 
-    const configSource =
-      result.config === (await import('../schemas/config.js')).DEFAULT_CONFIG
-        ? 'using defaults'
-        : 'dojo.toml found'
+    const configSource = result.source === 'defaults' ? 'using defaults' : 'dojo.toml found'
     logSuccess(`Config loaded (${configSource})`)
 
     try {
