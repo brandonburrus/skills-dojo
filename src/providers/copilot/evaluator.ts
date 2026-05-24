@@ -1,14 +1,7 @@
 import { CopilotClient, approveAll } from '@github/copilot-sdk'
 import type { Tool } from '@github/copilot-sdk'
+import { SELECTION_SYSTEM_MESSAGE } from '../shared/prompts.js'
 import type { Evaluator, SelectionResult, SelectionRunOptions } from '../types.js'
-
-const SYSTEM_MESSAGE = [
-  'You are an AI assistant.',
-  'You have access to skills that you can load to help with tasks.',
-  'Available skills are listed in the load_skill tool.',
-  'Only load a skill if you genuinely need it for the task.',
-  'If the task is simple enough to handle from your general knowledge, just respond directly.',
-].join(' ')
 
 function buildSkillDescription(skills: Array<{ name: string; description: string }>): string {
   const skillList = skills.map(s => `- ${s.name}: ${s.description}`).join('\n')
@@ -77,7 +70,7 @@ export class CopilotEvaluator implements Evaluator {
         onPermissionRequest: approveAll,
         systemMessage: {
           mode: 'replace',
-          content: SYSTEM_MESSAGE,
+          content: SELECTION_SYSTEM_MESSAGE,
         },
         tools: [loadSkillTool as Tool],
         streaming: true,

@@ -20,15 +20,21 @@ const SkillsSectionSchema = z.object({
     ),
 })
 
+export const SUPPORTED_PROVIDERS = ['copilot', 'openai', 'anthropic', 'vercel'] as const
+
 const ModelSectionSchema = z.object({
   provider: z
-    .string()
-    .default('copilot')
-    .describe('Model provider to use for evaluations. Currently only "copilot" is supported.'),
+    .enum(SUPPORTED_PROVIDERS)
+    .default('anthropic')
+    .describe(
+      'Model provider to use for evaluations. One of: copilot, openai, anthropic, vercel. Defaults to anthropic.',
+    ),
   evaluator: z
     .string()
     .optional()
-    .describe("Model to use for running evals. Defaults to the provider's default model."),
+    .describe(
+      'Model to use for running evals. Defaults to the provider\'s default model. For the vercel provider, use the form "<underlying-provider>/<model-id>" (e.g. "openai/gpt-4o-mini").',
+    ),
   judge: z
     .string()
     .optional()

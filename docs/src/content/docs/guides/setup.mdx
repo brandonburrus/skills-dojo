@@ -12,8 +12,8 @@ Dojo works with zero configuration using sensible defaults. To customize behavio
 dir = ["skills", ".agents/skills"]
 
 [model]
-provider = "copilot"
-evaluator = "gpt-4o"
+provider = "anthropic"
+evaluator = "claude-haiku-4-5"
 
 [reporting]
 per-skill = true
@@ -37,12 +37,23 @@ See the [Commands Reference](/reference/commands/) for all available commands an
 
 ## Model provider
 
-Dojo uses a model provider to power the evaluator agent that runs your evals. Currently, **GitHub Copilot** is the only supported provider. It is used by default and requires no additional configuration beyond having Copilot access.
+Dojo uses a model provider to power the evaluator agent that runs your evals. Four providers are supported:
+
+| Provider | Literal | API Key / Auth | Default Model |
+|----------|---------|----------------|---------------|
+| Anthropic | `anthropic` | `ANTHROPIC_API_KEY` | `claude-haiku-4-5` |
+| OpenAI | `openai` | `OPENAI_API_KEY` | `gpt-4o-mini` |
+| GitHub Copilot | `copilot` | Copilot subscription + auth | SDK default |
+| Vercel AI SDK | `vercel` | Key for the underlying provider | `openai/gpt-4o-mini` |
+
+The default provider is **Anthropic**. Switch providers via `dojo.toml` or the `--model-provider` CLI flag.
 
 ```toml
 [model]
-provider = "copilot"
-evaluator = "gpt-4o"
+provider = "anthropic"
+evaluator = "claude-haiku-4-5"
 ```
 
-The provider abstraction is designed to support additional providers in the future. See the [Config Reference](/reference/config/#model-fields) for the model configuration options.
+For the **Vercel** provider, the model string must be in the form `<underlying-provider>/<model-id>` (e.g. `openai/gpt-4o-mini` or `anthropic/claude-haiku-4-5`). This routes through the Vercel AI SDK to the specified underlying provider.
+
+See the [Config Reference](/reference/config/#model-fields) for the full model configuration options.

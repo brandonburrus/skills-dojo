@@ -11,7 +11,7 @@ import { discoverSkills } from '../loaders/skill.js'
 import { discoverSelectionFiles } from '../loaders/eval.js'
 import { formatRunReport } from '../output/table.js'
 import { dojoBanner, errorText, heading } from '../output/cli.js'
-import { CopilotEvaluator } from '../providers/copilot/evaluator.js'
+import { createEvaluator } from '../providers/factory.js'
 import {
   buildWorkItems,
   runSingleEval,
@@ -134,11 +134,7 @@ export async function runCommand(
     return
   }
 
-  const provider = config.model.provider
-  if (provider !== 'copilot') {
-    throw new Error(`Unknown evaluator provider: "${provider}". Only "copilot" is supported.`)
-  }
-  const evaluator = new CopilotEvaluator()
+  const evaluator = createEvaluator(config.model.provider)
 
   const runId = generateRunId()
   const ac = new AbortController()

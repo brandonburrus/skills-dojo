@@ -5,12 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { stringify as toYaml } from 'yaml'
 import { runCommand } from '../../src/commands/run.js'
 
-vi.mock('../../src/providers/copilot/evaluator.js', () => ({
-  CopilotEvaluator: class {
+// Mock the factory so the test is provider-agnostic — whatever provider the
+// config defaults to, the run command will receive this stub evaluator.
+vi.mock('../../src/providers/factory.js', () => ({
+  createEvaluator: () => ({
     async runSelection() {
       return { loaded: true, skillName: 'my-skill', raw: 'loaded my-skill' }
-    }
-  },
+    },
+  }),
 }))
 
 vi.mock('../../src/utils/run-id.js', () => ({
