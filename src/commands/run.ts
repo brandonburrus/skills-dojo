@@ -12,6 +12,7 @@ import {
   discoverSelectionFiles,
   discoverEffectivenessFiles,
   discoverFixtures,
+  discoverVariants,
 } from '../loaders/eval.js'
 import { formatRunReport, formatEffectivenessReport } from '../output/table.js'
 import { dojoBanner, errorText, heading } from '../output/cli.js'
@@ -29,7 +30,7 @@ import {
   type EffectivenessEvalResult,
 } from '../runner/effectiveness.js'
 import type { Judge } from '../providers/types.js'
-import type { DiscoveredFixture, RunReport } from '../types.js'
+import type { DiscoveredFixture, DiscoveredVariant, RunReport } from '../types.js'
 import { generateRunId } from '../utils/run-id.js'
 import { getGlobalOptions } from './globals.js'
 import { globMatch } from '../utils/glob-match.js'
@@ -104,7 +105,7 @@ function getDefaultModel(provider: string): string {
 }
 
 function variantLabel(variantName: string): string {
-  return variantName === 'base' ? '[current]' : `[variant: ${variantName}]`
+  return variantName === 'current' ? '[current]' : `[variant: ${variantName}]`
 }
 
 function taskTitle(skillName: string | null, evalName: string, variantName: string): string {
@@ -190,13 +191,21 @@ export async function runCommand(
   }
 
   const fixturesMap = new Map<string, DiscoveredFixture[]>()
+  const variantsMap = new Map<string, DiscoveredVariant[]>()
   if (runEffectiveness) {
-    for (const s of skills) {
-      const evalsDir = path.join(s.dirPath, 'evals')
-      const fixtures = await discoverFixtures(evalsDir)
-      if (fixtures.length > 0) {
-        fixturesMap.set(s.name, fixtures)
-      }
+    const discoveryResults = await Promise.all(
+      skills.map(async s => {
+        const evalsDir = path.join(s.dirPath, 'evals')
+        const [fixtures, variants] = await Promise.all([
+          discoverFixtures(evalsDir),
+          discoverVariants(evalsDir),
+        ])
+        return { name: s.name, fixtures, variants }
+      }),
+    )
+    for (const { name, fixtures, variants } of discoveryResults) {
+      if (fixtures.length > 0) fixturesMap.set(name, fixtures)
+      if (variants.length > 0) variantsMap.set(name, variants)
     }
   }
 
@@ -274,10 +283,28 @@ export async function runCommand(
         judges: new Map(),
         runId,
         defaultMatrix: preflightMatrix,
+        discoveredVariants: variantsMap,
       })
 
-      if (preflightWorkItems.length > 0) {
-        const providers = new Set(preflightWorkItems.map(i => i.evaluator.provider))
+      let filteredPreflightItems = preflightWorkItems
+      if (options.eval) {
+        filteredPreflightItems = filteredPreflightItems.filter(item =>
+          globMatch(options.eval!, item.eval_.name),
+        )
+      }
+      if (options.fixture) {
+        filteredPreflightItems = filteredPreflightItems.filter(item =>
+          globMatch(options.fixture!, item.fixture.name),
+        )
+      }
+      if (options.variant) {
+        filteredPreflightItems = filteredPreflightItems.filter(
+          item => item.variantName === options.variant,
+        )
+      }
+
+      if (filteredPreflightItems.length > 0) {
+        const providers = new Set(filteredPreflightItems.map(i => i.evaluator.provider))
         for (const provider of providers) {
           if (provider === 'anthropic' && !process.env.ANTHROPIC_API_KEY) {
             console.error(
@@ -298,7 +325,7 @@ export async function runCommand(
         }
 
         const judgeProviders = new Set(
-          preflightWorkItems.flatMap(i => i.judges.map(j => j.provider)),
+          filteredPreflightItems.flatMap(i => i.judges.map(j => j.provider)),
         )
         for (const provider of judgeProviders) {
           if (provider === 'anthropic' && !process.env.ANTHROPIC_API_KEY) {
@@ -336,6 +363,7 @@ export async function runCommand(
         judges: new Map(),
         runId,
         defaultMatrix,
+        discoveredVariants: variantsMap,
       })
 
       if (options.eval) {
@@ -347,6 +375,12 @@ export async function runCommand(
       if (options.fixture) {
         effectivenessWorkItems = effectivenessWorkItems.filter(item =>
           globMatch(options.fixture!, item.fixture.name),
+        )
+      }
+
+      if (options.variant) {
+        effectivenessWorkItems = effectivenessWorkItems.filter(
+          item => item.variantName === options.variant,
         )
       }
     }

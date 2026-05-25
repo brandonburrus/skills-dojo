@@ -110,10 +110,10 @@ correct output. The flow:
 4. Matrix support: run N evaluators × M judges × K fixtures per eval.
    Agent runs fan out to judges (one agent run → N judge calls).
 
-Fixture layout:
+Fixture and variant layout:
 ```
 evals/
-  effectiveness.yaml    eval definitions with criteria
+  effectiveness.yaml    eval definitions with criteria + inline variants
   fixtures/
     <name>/
       tests/            copied into sandbox as agent's cwd
@@ -121,7 +121,35 @@ evals/
       golden/
         notes.md        optional; freeform reference for judge
         files/          optional; reference file state
+  variants/
+    <variant-name>/
+      SKILL.md          agentskills.io-compliant variant skill
+      scripts/          optional
+      references/       optional
+      assets/           optional
 ```
+
+### Effectiveness variant model
+
+Variants let you A/B test different skill formulations against the same
+fixtures and criteria. Two sources are supported:
+
+- **Filesystem variants:** `evals/variants/<name>/SKILL.md` — full
+  agentskills.io skill directories discovered automatically.
+- **Inline variants:** defined in `effectiveness.yaml` under `variants[]`
+  with a `value` field containing SKILL.md content.
+
+The variant directory name is the variant's ID used to reference it in
+`effectiveness.yaml`. On name collision between inline and filesystem,
+filesystem wins (with a warning).
+
+The canonical `SKILL.md` is the implicit `current` variant — always
+runs unless `run-mode: variants-only` is set.
+
+`run-mode` controls which runs execute: `all` (default), `variants-only`,
+or `current-only`. Configurable at file level and per-eval (eval wins).
+
+Reports always include the `variant` field (`"current"` for baseline).
 
 ## Development flow
 
@@ -219,4 +247,24 @@ considered, why this choice was made, and when to revisit.
   (eval × fixture × evaluator × variant) for agent runs, then each
   artifact fans out to N judges. This makes judge-only reruns nearly
   free and avoids redundant agent executions.
+
+- **Filesystem variants over inline-only for effectiveness:** Inline
+  variants (a string in YAML) cannot carry `scripts/`, `references/`,
+  or `assets/` — they violate agentskills.io progressive disclosure.
+  Filesystem variants (`evals/variants/<name>/SKILL.md`) are full skill
+  directories. Both sources are supported; filesystem wins on name
+  collision. Selection variants remain inline-only (they're descriptions,
+  not full skills). Revisit if selection needs richer variant support.
+
+- **Variant validation is warn-but-allow:** Invalid variant SKILL.md
+  files emit a warning and are skipped rather than failing the run or
+  `dojo validate`. This supports iterative experimentation — you can
+  have WIP variants alongside production ones. Revisit if silent
+  skipping causes confusion in CI.
+
+- **Long-format-only variant reports:** Reports store one row per
+  (eval, fixture, evaluator, judge, variant, criterion) with `variant`
+  always populated (`"current"` for baseline). No side-by-side or delta
+  columns — defer aggregation to downstream tooling. Keeps the report
+  schema flat and tool-agnostic.
 

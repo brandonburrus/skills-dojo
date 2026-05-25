@@ -8,7 +8,10 @@ import type {
   DiscoveredFixture,
   DiscoveredSelectionFile,
   DiscoveredSkill,
+  DiscoveredVariant,
 } from '../types.js'
+import { parseFrontmatter } from './skill.js'
+import { SkillFrontmatterSchema } from '../schemas/skill.js'
 
 const SELECTION_FILENAMES = ['selection.yaml', 'selection.yml'] as const
 
@@ -188,4 +191,78 @@ export async function discoverFixtures(evalsDir: string): Promise<DiscoveredFixt
   }
 
   return fixtures
+}
+
+export async function discoverVariants(evalsDir: string): Promise<DiscoveredVariant[]> {
+  const variantsDir = path.join(evalsDir, 'variants')
+
+  try {
+    await access(variantsDir)
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      'code' in error &&
+      (error as NodeJS.ErrnoException).code === 'ENOENT'
+    ) {
+      return []
+    }
+    console.warn(
+      `Warning: variants directory could not be accessed, skipping: ${error instanceof Error ? error.message : String(error)}`,
+    )
+    return []
+  }
+
+  const entries = await readdir(variantsDir, { withFileTypes: true })
+  entries.sort((a, b) => a.name.localeCompare(b.name))
+  const variants: DiscoveredVariant[] = []
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+
+    const dirPath = path.join(variantsDir, entry.name)
+    const skillMdPath = path.join(dirPath, 'SKILL.md')
+
+    let content: string
+    try {
+      content = await readFile(skillMdPath, 'utf-8')
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        (error as NodeJS.ErrnoException).code === 'ENOENT'
+      ) {
+        continue
+      }
+      console.warn(
+        `Warning: variant "${entry.name}" could not be read, skipping: ${error instanceof Error ? error.message : String(error)}`,
+      )
+      continue
+    }
+
+    let rawFrontmatter: Record<string, unknown>
+    try {
+      rawFrontmatter = parseFrontmatter(content)
+    } catch (error) {
+      console.warn(
+        `Warning: variant "${entry.name}" has invalid SKILL.md, skipping: ${error instanceof Error ? error.message : String(error)}`,
+      )
+      continue
+    }
+
+    const result = SkillFrontmatterSchema.safeParse(rawFrontmatter)
+    if (!result.success) {
+      console.warn(
+        `Warning: variant "${entry.name}" has invalid SKILL.md, skipping: ${result.error.message}`,
+      )
+      continue
+    }
+
+    variants.push({
+      name: entry.name,
+      dirPath,
+      description: result.data.description,
+    })
+  }
+
+  return variants
 }

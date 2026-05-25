@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { Command } from 'commander'
 import chalk from 'chalk'
 import {
@@ -8,7 +9,11 @@ import {
 } from '../errors.js'
 import { loadConfig, type ConfigOverrides } from '../loaders/config.js'
 import { discoverSkills } from '../loaders/skill.js'
-import { discoverSelectionFiles, discoverEffectivenessFiles } from '../loaders/eval.js'
+import {
+  discoverSelectionFiles,
+  discoverEffectivenessFiles,
+  discoverVariants,
+} from '../loaders/eval.js'
 import { logSuccess, logFailure } from '../output/cli.js'
 import type { DiscoveredSkill } from '../types.js'
 import { getGlobalOptions } from './globals.js'
@@ -37,6 +42,7 @@ export async function validateCommand(
   let skills: readonly DiscoveredSkill[] = []
   let evalCount = 0
   let effEvalCount = 0
+  let variantCount = 0
 
   try {
     const result = await loadConfig(startDir, overrides, configFile)
@@ -85,6 +91,20 @@ export async function validateCommand(
         throw error
       }
     }
+
+    // Variant discovery (warn-but-allow)
+    if (skills.length > 0) {
+      for (const skill of skills) {
+        const evalsDir = path.join(skill.dirPath, 'evals')
+        const variants = await discoverVariants(evalsDir)
+        variantCount += variants.length
+      }
+      if (variantCount > 0) {
+        logSuccess(
+          `${variantCount} effectiveness variant${variantCount === 1 ? '' : 's'} discovered`,
+        )
+      }
+    }
   } catch (error) {
     if (error instanceof DojoError) {
       hasErrors = true
@@ -97,7 +117,7 @@ export async function validateCommand(
   if (!hasErrors) {
     console.error(
       chalk.blueBright(
-        `\nValidated ${skills.length} skill${skills.length === 1 ? '' : 's'}, ${evalCount} selection eval${evalCount === 1 ? '' : 's'}, ${effEvalCount} effectiveness eval${effEvalCount === 1 ? '' : 's'}`,
+        `\nValidated ${skills.length} skill${skills.length === 1 ? '' : 's'}, ${evalCount} selection eval${evalCount === 1 ? '' : 's'}, ${effEvalCount} effectiveness eval${effEvalCount === 1 ? '' : 's'}${variantCount > 0 ? `, ${variantCount} variant${variantCount === 1 ? '' : 's'}` : ''}`,
       ),
     )
   }

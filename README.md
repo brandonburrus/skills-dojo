@@ -105,7 +105,11 @@ dojo run
 
 ## Variants
 
-Variants let you A/B test different skill descriptions. Useful for tuning the `description` field in your `SKILL.md`.
+Variants let you A/B test different skill formulations. There are two types depending on the eval type.
+
+### Selection variants (inline)
+
+For selection evals, variants test different `description` values to see which wording helps the agent pick the right skill:
 
 ```yaml
 variants:
@@ -125,15 +129,89 @@ evals:
 
 Each eval runs once with the current skill description, then once per variant. Results show up in a matrix so you can compare.
 
+### Effectiveness variants (filesystem)
+
+For effectiveness evals, variants are full skill directories that follow the [agentskills.io spec](https://agentskills.io/specification). This lets you test fundamentally different skill formulations — not just description changes, but different instructions, scripts, references, and assets.
+
+Place variant skills in `evals/variants/<name>/`:
+
+```
+skills/
+  sql-queries/
+    SKILL.md
+    evals/
+      effectiveness.yaml
+      fixtures/
+        aggregate-query/
+          tests/
+            schema.sql
+      variants/
+        terse-instructions/
+          SKILL.md
+        verbose-instructions/
+          SKILL.md
+          scripts/
+            validate.sh
+```
+
+Each variant directory is a complete agentskills.io skill. The directory name is the variant ID used to reference it in `effectiveness.yaml`:
+
+```yaml
+evals:
+  - name: aggregate-monthly-revenue
+    variants: [terse-instructions, verbose-instructions]
+    prompt: "Write a SQL query that calculates total revenue per month."
+    criteria:
+      - name: correct-aggregation
+        description: Groups by month and sums revenue
+        pass_threshold: 0.7
+```
+
+You can also define inline variants in `effectiveness.yaml` for quick experiments:
+
+```yaml
+variants:
+  - name: minimal-prompt
+    value: |
+      ---
+      name: minimal-prompt
+      description: Minimal SQL skill.
+      ---
+
+      # SQL
+
+      Write SQL. Be concise.
+```
+
+If an inline variant has the same name as a filesystem variant, the filesystem version wins (with a warning).
+
 ### Run modes
 
 Control which combinations run with `run-mode`:
 
 | Mode | What runs |
 |------|-----------|
-| `all` (default) | Current description + all variants |
+| `all` (default) | Current skill + all variants |
 | `variants-only` | Variants only, skips current |
 | `current-only` | Current only, skips variants |
+
+Set at file level or per-eval (eval wins):
+
+```yaml
+run-mode: variants-only
+
+evals:
+  - name: compare-variants
+    run-mode: all  # overrides file-level
+    variants: [terse-instructions]
+    prompt: "..."
+```
+
+Filter to a single variant from the CLI:
+
+```bash
+dojo run --variant terse-instructions
+```
 
 ## Decoys
 

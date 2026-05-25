@@ -36,7 +36,7 @@ const EffectivenessEvalResultSchema = z.object({
   fixture: z.string(),
   evaluator: z.string(),
   judge: z.string(),
-  variant: z.string().optional(),
+  variant: z.string().describe('Variant name: "current" for baseline, or the variant ID.'),
   skillName: z.string().nullable(),
   passed: z.boolean(),
   criteria: z.array(CriterionResultSchema),

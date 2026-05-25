@@ -18,7 +18,7 @@ export const VariantSchema = z.object({
   decoys: z.array(DecoySchema).optional().describe('Decoy skills specific to this variant.'),
 })
 
-const RunModeSchema = z.enum(['all', 'variants-only', 'current-only'])
+export const RunModeSchema = z.enum(['all', 'variants-only', 'current-only'])
 
 const VariantsRefSchema = z.union([z.literal('all'), z.array(z.string()), z.array(VariantSchema)])
 
@@ -99,6 +99,9 @@ export const EffectivenessEvalSchema = z.object({
     .optional()
     .default('all')
     .describe('Variants to run.'),
+  'run-mode': RunModeSchema.optional().describe(
+    'Controls which runs to perform: "all" runs current + variants, "variants-only" skips current, "current-only" skips variants.',
+  ),
   matrix: EffectivenessMatrixSchema.optional().describe('Override the matrix for this eval.'),
 })
 
@@ -107,6 +110,9 @@ export const EffectivenessFileSchema = z.object({
   judge: z.string().optional().describe('Default judge model (format: "provider/model").'),
   timeout: z.number().positive().optional().default(120).describe('Default timeout in seconds.'),
   matrix: EffectivenessMatrixSchema.optional().describe('Default matrix applied to all evals.'),
+  'run-mode': RunModeSchema.optional()
+    .default('all')
+    .describe('Default run mode for evals: "all", "variants-only", or "current-only".'),
   variants: z.array(VariantSchema).optional().describe('Variant definitions available to evals.'),
   evals: z.array(EffectivenessEvalSchema).describe('List of effectiveness evals to run.'),
 })

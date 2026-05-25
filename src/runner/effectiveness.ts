@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { readFile, readdir, stat } from 'node:fs/promises'
+import { readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod/v4'
 import type { Judge, JudgeInput, EffectivenessResult } from '../providers/types.js'
@@ -8,6 +8,7 @@ import type {
   DiscoveredEffectivenessFile,
   DiscoveredFixture,
   DiscoveredSkill,
+  DiscoveredVariant,
   EffectivenessEval,
   EffectivenessFile,
   MatrixEntry,
@@ -41,8 +42,10 @@ export interface EffectivenessAgentWorkItem {
   skillDirPath: string
   timeout: number
   variantName: string
-  /** For 'base' variant: path to SKILL.md. For other variants: inline skill content. */
-  variantSkillContent: string
+  /** Path to the variant skill directory (canonical skill dir for 'current', variant dir for filesystem variants). */
+  variantSkillDir: string
+  /** For inline variants: the full SKILL.md content to write into the sandbox. */
+  inlineSkillContent?: string
 }
 
 export interface EffectivenessEvalResult {
@@ -50,7 +53,7 @@ export interface EffectivenessEvalResult {
   fixture: string
   evaluator: string
   judge: string
-  variant?: string
+  variant: string
   skillName: string | null
   passed: boolean
   criteria: Array<{ name: string; score: number; passed: boolean; reasoning: string }>
@@ -81,6 +84,16 @@ export interface EffectivenessRunnerOptions {
   keepSandbox?: boolean
   /** Fallback matrix derived from global config when YAML doesn't specify one. */
   defaultMatrix?: { evaluators: MatrixEntry[]; judges: MatrixEntry[] }
+  /** Discovered filesystem variants per skill (keyed by skill name). */
+  discoveredVariants?: ReadonlyMap<string, DiscoveredVariant[]>
+}
+
+interface ResolvedVariant {
+  name: string
+  /** For inline variants, null. For filesystem variants, the variant dir path. */
+  dirPath: string | null
+  /** For inline variants only: the SKILL.md body content. */
+  inlineContent: string | null
 }
 
 function formatMatrixEntry(entry: MatrixEntry): string {
@@ -91,22 +104,76 @@ function isStringArray(arr: readonly (string | Variant)[]): arr is string[] {
   return arr.length > 0 && typeof arr[0] === 'string'
 }
 
-function resolveVariants(eval_: EffectivenessEval, fileVariants: Variant[] | undefined): Variant[] {
+function resolveVariants(
+  eval_: EffectivenessEval,
+  fileVariants: Variant[] | undefined,
+  discoveredVariants: DiscoveredVariant[],
+): ResolvedVariant[] {
+  // Build pools
+  const inlinePool: ResolvedVariant[] = (fileVariants ?? [])
+    .filter(v => v.enabled)
+    .map(v => ({ name: v.name, dirPath: null, inlineContent: v.value }))
+
+  const fsPool: ResolvedVariant[] = discoveredVariants.map(v => ({
+    name: v.name,
+    dirPath: v.dirPath,
+    inlineContent: null,
+  }))
+
+  // Merge: filesystem wins on collision
+  const merged = new Map<string, ResolvedVariant>()
+  for (const v of inlinePool) {
+    merged.set(v.name, v)
+  }
+  for (const v of fsPool) {
+    if (merged.has(v.name)) {
+      console.warn(
+        `Warning: variant "${v.name}" found both inline and as filesystem variant; using filesystem version`,
+      )
+    }
+    merged.set(v.name, v)
+  }
+
   const ref = eval_.variants
 
   if (ref === 'all') {
-    return (fileVariants ?? []).filter(v => v.enabled)
+    return Array.from(merged.values())
   }
 
   if (ref.length === 0) return []
 
   if (isStringArray(ref)) {
     const names = new Set(ref)
-    const available = fileVariants ?? []
-    return available.filter(v => v.enabled && names.has(v.name))
+    const result: ResolvedVariant[] = []
+    for (const name of names) {
+      const v = merged.get(name)
+      if (v) {
+        result.push(v)
+      } else {
+        console.warn(`Warning: variant "${name}" referenced but not found`)
+      }
+    }
+    return result
   }
 
-  return ref.filter(v => v.enabled)
+  // Inline definitions in the eval itself
+  const inlineDefs: ResolvedVariant[] = ref
+    .filter(v => v.enabled)
+    .map(v => ({ name: v.name, dirPath: null, inlineContent: v.value }))
+
+  // Check for filesystem collisions
+  for (const v of inlineDefs) {
+    const fsMatch = fsPool.find(f => f.name === v.name)
+    if (fsMatch) {
+      console.warn(
+        `Warning: variant "${v.name}" found both inline and as filesystem variant; using filesystem version`,
+      )
+      v.dirPath = fsMatch.dirPath
+      v.inlineContent = null
+    }
+  }
+
+  return inlineDefs
 }
 
 function resolveMatrix(
@@ -142,10 +209,17 @@ function parseModelShorthand(shorthand: string): MatrixEntry {
   return { provider: 'openai', model: shorthand }
 }
 
+function resolveRunMode(
+  eval_: EffectivenessEval,
+  file: EffectivenessFile,
+): 'all' | 'variants-only' | 'current-only' {
+  return eval_['run-mode'] ?? file['run-mode'] ?? 'all'
+}
+
 export function buildEffectivenessWorkItems(
   options: EffectivenessRunnerOptions,
 ): EffectivenessAgentWorkItem[] {
-  const { effectivenessFiles, fixtures, skills, defaultMatrix } = options
+  const { effectivenessFiles, fixtures, skills, defaultMatrix, discoveredVariants } = options
   const items: EffectivenessAgentWorkItem[] = []
 
   for (const { file, skillName } of effectivenessFiles) {
@@ -155,7 +229,6 @@ export function buildEffectivenessWorkItems(
     if (!skill) continue
 
     const skillFixtures = fixtures.get(skillName) ?? []
-    const skillContentPath = path.join(skill.dirPath, 'SKILL.md')
 
     for (const eval_ of file.evals) {
       if (!eval_.enabled) continue
@@ -171,25 +244,14 @@ export function buildEffectivenessWorkItems(
       if (evalFixtures.length === 0) continue
 
       const timeout = eval_.timeout ?? file.timeout
-      const variants = resolveVariants(eval_, file.variants)
+      const skillDiscoveredVariants = discoveredVariants?.get(skillName) ?? []
+      const variants = resolveVariants(eval_, file.variants, skillDiscoveredVariants)
+      const runMode = resolveRunMode(eval_, file)
 
       for (const fixture of evalFixtures) {
         for (const evaluator of evaluators) {
-          // Base run
-          items.push({
-            eval_,
-            fixture,
-            evaluator,
-            judges,
-            skillName,
-            skillDirPath: skill.dirPath,
-            timeout,
-            variantName: 'base',
-            variantSkillContent: skillContentPath,
-          })
-
-          // Variant runs
-          for (const variant of variants) {
+          // Current run
+          if (runMode !== 'variants-only') {
             items.push({
               eval_,
               fixture,
@@ -198,9 +260,30 @@ export function buildEffectivenessWorkItems(
               skillName,
               skillDirPath: skill.dirPath,
               timeout,
-              variantName: variant.name,
-              variantSkillContent: variant.value,
+              variantName: 'current',
+              variantSkillDir: skill.dirPath,
             })
+          }
+
+          // Variant runs
+          if (runMode !== 'current-only') {
+            for (const variant of variants) {
+              const item: EffectivenessAgentWorkItem = {
+                eval_,
+                fixture,
+                evaluator,
+                judges,
+                skillName,
+                skillDirPath: skill.dirPath,
+                timeout,
+                variantName: variant.name,
+                variantSkillDir: variant.dirPath ?? skill.dirPath,
+              }
+              if (variant.inlineContent !== null) {
+                item.inlineSkillContent = variant.inlineContent
+              }
+              items.push(item)
+            }
           }
         }
       }
@@ -208,11 +291,6 @@ export function buildEffectivenessWorkItems(
   }
 
   return items
-}
-
-async function readSkillContent(skillDirPath: string): Promise<string> {
-  const skillMdPath = path.join(skillDirPath, 'SKILL.md')
-  return readFile(skillMdPath, 'utf-8')
 }
 
 async function readGoldenReference(
@@ -367,11 +445,13 @@ export async function runSingleEffectivenessEval(
   })
 
   try {
+    const resolvedSkillDir =
+      item.inlineSkillContent !== undefined ? item.skillDirPath : item.variantSkillDir
     const sandboxOptions: SandboxOptions = {
       runId,
       skillName: item.skillName ?? 'unknown',
       fixtureName: item.fixture.name,
-      skillDirPath: item.skillDirPath,
+      skillDirPath: resolvedSkillDir,
       fixtureTestsDir: item.fixture.testsDir,
       evaluatorId,
       sample: runIndex,
@@ -380,15 +460,17 @@ export async function runSingleEffectivenessEval(
     const sandbox = await createSandbox(sandboxOptions)
 
     try {
+      // For inline variants, overwrite the SKILL.md in the sandbox skill dir
+      if (item.inlineSkillContent !== undefined) {
+        await writeFile(path.join(sandbox.skillDir, 'SKILL.md'), item.inlineSkillContent, 'utf-8')
+      }
+
+      // Capture skill content before setup/agent run to ensure judge scores the intended prompt
+      const skillContent = await readFile(path.join(sandbox.skillDir, 'SKILL.md'), 'utf-8')
+
       await runSetup(sandbox, signal)
       const artifact = await spawnAgent(item, sandbox, signal)
       const { fsDiff } = await finalizeSandbox(sandbox)
-
-      // Resolve skill content: for 'base' variant read from disk, for variants use inline value
-      const skillContent =
-        item.variantName === 'base'
-          ? await readSkillContent(item.skillDirPath)
-          : item.variantSkillContent
 
       const golden = await readGoldenReference(item.fixture)
       const durationMs = performance.now() - start
@@ -405,7 +487,7 @@ export async function runSingleEffectivenessEval(
             fixture: item.fixture.name,
             evaluator: evaluatorId,
             judge: judgeId,
-            variant: item.variantName === 'base' ? undefined : item.variantName,
+            variant: item.variantName,
             skillName: item.skillName,
             passed: false,
             criteria: [],
@@ -439,7 +521,7 @@ export async function runSingleEffectivenessEval(
             fixture: item.fixture.name,
             evaluator: evaluatorId,
             judge: judgeId,
-            variant: item.variantName === 'base' ? undefined : item.variantName,
+            variant: item.variantName,
             skillName: item.skillName,
             passed: judgeResult.overallPassed,
             criteria: judgeResult.perCriterion.map(c => ({
@@ -456,7 +538,7 @@ export async function runSingleEffectivenessEval(
             fixture: item.fixture.name,
             evaluator: evaluatorId,
             judge: judgeId,
-            variant: item.variantName === 'base' ? undefined : item.variantName,
+            variant: item.variantName,
             skillName: item.skillName,
             passed: false,
             criteria: [],
@@ -502,7 +584,7 @@ export async function runSingleEffectivenessEval(
       fixture: item.fixture.name,
       evaluator: evaluatorId,
       judge: formatMatrixEntry(judgeEntry),
-      variant: item.variantName === 'base' ? undefined : item.variantName,
+      variant: item.variantName,
       skillName: item.skillName,
       passed: false,
       criteria: [],
@@ -547,7 +629,7 @@ export async function runEffectivenessEvals(
               fixture: items[j].fixture.name,
               evaluator: formatMatrixEntry(items[j].evaluator),
               judge: formatMatrixEntry(judgeEntry),
-              variant: items[j].variantName === 'base' ? undefined : items[j].variantName,
+              variant: items[j].variantName,
               skillName: items[j].skillName,
               passed: false,
               criteria: [],
