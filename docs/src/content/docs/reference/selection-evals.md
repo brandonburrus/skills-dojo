@@ -1,5 +1,5 @@
 ---
-title: "Eval File Reference"
+title: "Selection Evals Reference"
 description: "Reference for the selection eval YAML file format."
 ---
 
@@ -9,7 +9,7 @@ This page is auto-generated.
 
 ## Selection File
 
-Top-level schema for selection eval YAML files.
+Top-level schema for `selection.yaml` files.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
@@ -22,7 +22,7 @@ Top-level schema for selection eval YAML files.
 
 ## Selection Eval
 
-Schema for individual eval entries within the `evals` array.
+Schema for individual entries in a selection file's `evals` array.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|

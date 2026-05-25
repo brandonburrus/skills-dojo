@@ -12,6 +12,11 @@ export default defineConfig({
           label: 'GitHub',
           href: 'https://github.com/brandonburrus/skills-dojo',
         },
+        {
+          icon: 'npm',
+          label: 'npm',
+          href: 'https://www.npmjs.com/package/skills-dojo',
+        },
       ],
       editLink: {
         baseUrl: 'https://github.com/brandonburrus/skills-dojo/edit/main/docs/',
@@ -34,8 +39,8 @@ export default defineConfig({
           label: 'Guides',
           items: [
             { label: 'Quick Start', slug: 'guides/quick-start' },
-            { label: 'Selection Evals', slug: 'guides/writing-evals' },
-            { label: 'Effectiveness Evals', slug: 'guides/effectiveness-evals' },
+            { label: 'Testing Selection', slug: 'guides/writing-evals' },
+            { label: 'Testing Effectiveness', slug: 'guides/effectiveness-evals' },
             { label: 'Testing Variants', slug: 'guides/testing-variants' },
             { label: 'Setup', slug: 'guides/setup' },
           ],
@@ -44,7 +49,8 @@ export default defineConfig({
           label: 'Reference',
           items: [
             { label: 'Commands', slug: 'reference/commands' },
-            { label: 'Evals', slug: 'reference/evals' },
+            { label: 'Selection Evals', slug: 'reference/selection-evals' },
+            { label: 'Effectiveness Evals', slug: 'reference/effectiveness-evals' },
             { label: 'Variants', slug: 'reference/variants' },
             { label: 'Config', slug: 'reference/config' },
           ],

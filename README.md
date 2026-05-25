@@ -1,22 +1,28 @@
 # Skills Dojo
 
-A toolkit for testing, evaluating, and improving AI agent skills.
+A CLI for testing and improving AI agent skills. You write a skill, write evals against it, and Dojo tells you whether the skill works.
 
 Skills follow the [Agent Skills specification](https://agentskills.io/specification).
 
-Dojo supports **selection evals** (does the agent load the right skill?) and **effectiveness evals** (does the skill actually help the agent produce correct output?). Selection evals register a `load_skill` tool and observe whether the agent calls it; effectiveness evals run the agent in a sandbox and have an LLM judge score the results.
-
 ![Example run output](example.png)
 
-## Quick Start
+## Install
 
 ```bash
 npm install -g skills-dojo
 ```
 
-### Selection Eval
+## What it tests
 
-Create a skill with a `SKILL.md` file and a `selection.yaml` eval file:
+**Selection evals** answer: does the agent pick the right skill for the job?
+
+**Effectiveness evals** answer: does the skill actually help the agent produce correct output?
+
+## Getting started
+
+### Selection eval
+
+Create a skill with a `SKILL.md` and an eval file:
 
 ```
 skills/
@@ -51,18 +57,17 @@ evals:
     assert: none
 ```
 
-When `assert` is omitted, it defaults to the skill the eval lives under (e.g. `code-review`). Use `assert: none` to test that the agent does _not_ select the skill.
+When `assert` is omitted, Dojo expects the agent to select the skill the eval lives under. Use `assert: none` to test that the agent does _not_ select any skill.
 
-### Effectiveness Eval
+### Effectiveness eval
 
-Add an `effectiveness.yaml` and fixtures:
+Add an `effectiveness.yaml` and fixture directories:
 
 ```
 skills/
   sql-queries/
     SKILL.md
     evals/
-      selection.yaml
       effectiveness.yaml
       fixtures/
         aggregate-query/
@@ -79,12 +84,20 @@ evals:
   - name: aggregate-monthly-revenue
     prompt: "Write a SQL query that calculates total revenue per month from the orders table."
     criteria:
-      - Uses GROUP BY with a date function
-      - Returns both month and revenue columns
-      - Handles NULL values appropriately
+      - name: groups-by-month
+        description: Uses GROUP BY with a date function to aggregate by month
+        pass_threshold: 0.7
+      - name: correct-columns
+        description: Returns both month and revenue columns
+        pass_threshold: 0.7
+      - name: null-handling
+        description: Handles NULL values appropriately
+        pass_threshold: 0.5
 ```
 
-### Run evals
+The agent runs in a sandboxed temp directory with real tools (`bash`, `read_file`, `write_file`, `list_files`). Files from `tests/` become the agent's working directory. An LLM judge scores the result against your criteria. Put reference material in `golden/` to help the judge calibrate.
+
+### Run it
 
 ```bash
 dojo run
@@ -92,7 +105,7 @@ dojo run
 
 ## Variants
 
-Variants let you test the same eval against different skill descriptions. This is useful for tuning the `description` field in your `SKILL.md` — you can compare how a concise vs verbose description affects selection accuracy.
+Variants let you A/B test different skill descriptions. Useful for tuning the `description` field in your `SKILL.md`.
 
 ```yaml
 variants:
@@ -110,21 +123,21 @@ evals:
     prompt: "Write a query that finds the top 10 customers by revenue using a window function."
 ```
 
-Each eval runs once with the current skill description (`[current]`), then once per variant with the variant's `value` substituted as the skill description. Results are displayed in a matrix so you can compare across variants.
+Each eval runs once with the current skill description, then once per variant. Results show up in a matrix so you can compare.
 
 ### Run modes
 
-Control which combinations run with `run-mode` (at file or eval level):
+Control which combinations run with `run-mode`:
 
-| Mode | Behavior |
-|------|----------|
-| `all` (default) | Run current + all variants |
-| `variants-only` | Skip current, run variants only |
-| `current-only` | Skip variants, run current only |
+| Mode | What runs |
+|------|-----------|
+| `all` (default) | Current description + all variants |
+| `variants-only` | Variants only, skips current |
+| `current-only` | Current only, skips variants |
 
 ## Decoys
 
-Decoys are fake skills injected into the available skill list to test discrimination:
+Decoys are fake skills injected alongside real ones to test whether the agent can tell the difference:
 
 ```yaml
 evals:
@@ -137,25 +150,12 @@ evals:
         value: Explain what a piece of code does in plain English.
 ```
 
-Variants can also define decoys. When both exist, they are merged (deduplicated by name).
-
-## Effectiveness Evals
-
-Effectiveness evals test whether a skill actually helps an agent produce correct output.
-
-- The agent runs in a **sandboxed temp directory** with real tools (`bash`, `read_file`, `write_file`, `list_files`).
-- **Fixtures** provide test scenarios: the `tests/` directory is copied as the agent's working directory. An optional `tests/setup.sh` runs before the agent starts.
-- An **LLM judge** scores the agent's output against user-defined criteria. Optional `golden/` material (notes, reference files) calibrates the judge.
-- **Matrix support**: run N evaluators x M judges per eval. Agent runs fan out to judges — one agent run produces N judge scores.
-
-See [skillsdojo.dev](https://skillsdojo.dev) for full effectiveness eval documentation.
-
 ## CLI
 
 ```
-dojo run [skill]              Run evals, optionally filtering by skill name
+dojo run [skill]              Run evals (optionally filter by skill name)
   -e, --eval <name>           Filter by eval name
-  -V, --variant <name>        Run only a specific variant by name
+  -V, --variant <name>        Run only a specific variant
   -t, --eval-type <type>      Filter: "selection", "effectiveness", or "all"
   --selection                  Run only selection evals
   --effectiveness              Run only effectiveness evals
@@ -165,9 +165,9 @@ dojo run [skill]              Run evals, optionally filtering by skill name
   -f, --fixture <name>        Filter to a specific fixture
   --judge-filter <id>         Filter to a specific judge
   -p, --parallelism <n>       Max concurrent eval runs (default: CPU cores)
-  --no-parallelism            Run evals sequentially
+  --no-parallelism            Run sequentially
   -o, --output <path>         Write combined report JSON
-  -i, --inspect               Show session events
+  -i, --inspect               Show session events (tool calls, errors)
   --keep-sandbox              Keep sandbox temp dirs after run
   -y, --yes                   Skip confirmation prompts
 
@@ -179,79 +179,85 @@ Global flags:
 
 ```
 -s, --skills-dir <dir>    Override skills directory (repeatable)
--c, --config <path>       Path to config file (default: auto-detect dojo.toml)
--d, --cwd <dir>           Working directory for config and skill discovery
+-c, --config <path>       Path to config file
+-d, --cwd <dir>           Working directory
 ```
 
-## Eval Schema
+## Configuration
 
-Each skill has a single `evals/selection.yaml` file containing all its evals.
+Optional `dojo.toml` in your project root. Everything has sensible defaults, so you can skip this entirely until you need to customize something.
+
+```toml
+[skills]
+# Default: searches skills/, .agents/skills/, .github/skills/, .claude/skills/,
+#          .codex/skills/, .gemini/skills/, .openclaw/skills/, .opencode/skills/
+dir = ['skills']
+
+[model]
+provider = 'anthropic'
+evaluator = 'claude-sonnet-4-6'
+judge = 'claude-opus-4-6'
+
+[effectiveness]
+warn_fixture_threshold = 4
+confirm_fixture_threshold = 12
+
+[reporting]
+per-skill = true
+consolidated = false
+```
+
+### Providers
+
+| Provider | Setup |
+|----------|-------|
+| `anthropic` (default) | Set `ANTHROPIC_API_KEY` |
+| `openai` | Set `OPENAI_API_KEY` |
+| `copilot` | GitHub Copilot SDK |
+| `vercel` | Vercel AI SDK. Use `<provider>/<model-id>` model strings (e.g. `openai/gpt-4o-mini`) |
+
+## Eval schema reference
 
 ### File-level fields
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `model` | string | SDK default | Model for the evaluator session. |
-| `timeout` | number | `30` | Timeout in seconds. |
-| `skills` | `"all"` or `string[]` | `"all"` | Which skills to offer the agent. |
-| `run-mode` | `"all"`, `"variants-only"`, `"current-only"` | `"all"` | Which combinations to run. |
-| `variants` | `Variant[]` | — | Variant definitions. |
-| `evals` | `Eval[]` | — | **Required.** The eval definitions. |
+| `model` | string | provider default | Model for the evaluator |
+| `timeout` | number | `30` | Timeout in seconds |
+| `skills` | `"all"` or `string[]` | `"all"` | Which skills to offer the agent |
+| `run-mode` | `"all"`, `"variants-only"`, `"current-only"` | `"all"` | Which combinations to run |
+| `variants` | `Variant[]` | -- | Variant definitions |
+| `evals` | `Eval[]` | -- | **Required.** The eval definitions |
 
 ### Eval-level fields
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `name` | string | — | **Required.** Eval identifier. |
-| `prompt` | string | — | **Required.** The prompt sent to the agent. |
-| `assert` | `string[]`, `"none"`, `"any"` | `[skillName]` | Expected selection result. |
-| `model` | string | file-level | Override model for this eval. |
-| `timeout` | number | file-level | Override timeout for this eval. |
-| `skills` | `"all"` or `string[]` | file-level | Override available skills. |
-| `run-mode` | `"all"`, `"variants-only"`, `"current-only"` | file-level | Override run mode. |
-| `variants` | `"all"`, `string[]`, `Variant[]` | `"all"` | Which variants to run. |
-| `decoys` | `Decoy[]` | — | Fake skills for discrimination testing. |
-| `enabled` | boolean | `true` | Skip this eval when `false`. |
-
-### Variant fields
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `name` | string | — | **Required.** Variant identifier. |
-| `value` | string | — | **Required.** Skill description override. |
-| `enabled` | boolean | `true` | Skip this variant when `false`. |
-| `decoys` | `Decoy[]` | — | Additional decoys for this variant. |
+| `name` | string | -- | **Required.** Eval identifier |
+| `prompt` | string | -- | **Required.** The prompt sent to the agent |
+| `assert` | `string[]`, `"none"`, `"any"` | `[skillName]` | Expected selection result |
+| `model` | string | file-level | Override model for this eval |
+| `timeout` | number | file-level | Override timeout |
+| `skills` | `"all"` or `string[]` | file-level | Override available skills |
+| `run-mode` | `"all"`, `"variants-only"`, `"current-only"` | file-level | Override run mode |
+| `variants` | `"all"`, `string[]`, `Variant[]` | `"all"` | Which variants to run |
+| `decoys` | `Decoy[]` | -- | Fake skills for discrimination testing |
+| `enabled` | boolean | `true` | Skip this eval when `false` |
 
 ### Assert behavior
 
-- **omitted** — defaults to `[skillName]` (the skill the eval lives under)
-- **`"none"`** — the agent must not load any skill
-- **`"any"`** — the agent must load something (any skill)
-- **`["skill-a", "skill-b"]`** — the agent must load one of the listed skills
+- **omitted** -- expects the skill the eval lives under
+- **`"none"`** -- agent must not load any skill
+- **`"any"`** -- agent must load something (any skill counts)
+- **`["skill-a", "skill-b"]`** -- agent must load one of these
 
 ### Cascading
 
-Fields cascade: eval-level overrides file-level, file-level overrides defaults. For `model`, the cascade is: eval > file > CLI flag/config > SDK default.
-
-## Configuration
-
-Optional `dojo.toml` in the working directory. Everything has sensible defaults.
-
-```toml
-[skills]
-dir = ['skills', '.agents/skills', '.github/skills', '.claude/skills', '.codex/skills', '.gemini/skills', '.openclaw/skills', '.opencode/skills']
-
-[model]
-provider = 'anthropic'
-# evaluator = 'claude-sonnet-4-20250514'   # optional override for eval agent model
-# judge = 'claude-sonnet-4-20250514'       # optional override for judge model
-```
-
-The `provider` setting applies to both evaluation and judging.
+Fields cascade: eval-level beats file-level, file-level beats config, config beats defaults.
 
 ## Reports
 
-Reports are saved per-skill at:
+Reports are saved per-skill after each run:
 
 ```
 <skill-dir>/evals/reports/<run-id>/report.json
@@ -259,15 +265,6 @@ Reports are saved per-skill at:
 <skill-dir>/evals/reports/<run-id>/logs.json
 ```
 
-## Provider Architecture
+## Documentation
 
-Evaluator and Judge are interfaces — not tied to any specific SDK. Four providers ship today:
-
-| Provider | Notes |
-|----------|-------|
-| `anthropic` | Default. Reads `ANTHROPIC_API_KEY`. |
-| `openai` | Reads `OPENAI_API_KEY`. |
-| `copilot` | GitHub Copilot SDK (v1.0.0-beta.4). |
-| `vercel` | Vercel AI SDK. Routes via `<provider>/<model-id>` model strings (e.g. `openai/gpt-4o-mini`). |
-
-All four implement both the `Evaluator` and `Judge` interfaces. To add a new provider, create `src/providers/<name>/evaluator.ts`, add the literal to `SUPPORTED_PROVIDERS` in `src/schemas/config.ts`, and wire the dispatch in `src/providers/factory.ts`.
+Full docs at [skillsdojo.dev](https://skillsdojo.dev).

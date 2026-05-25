@@ -16,7 +16,6 @@ skills/
   sql-queries/
     SKILL.md
     evals/
-      selection.yaml         # selection evals (optional)
       effectiveness.yaml     # effectiveness evals
       fixtures/
         basic-join/
@@ -36,20 +35,15 @@ skills/
 ## The effectiveness.yaml file
 
 ```yaml
-timeout: 180                  # default timeout per eval (seconds)
-
-defaults:
-  matrix:
-    evaluators:
-      - provider: anthropic
-        model: claude-sonnet-4-20250514
-    judges:
-      - provider: anthropic
-        model: claude-sonnet-4-20250514
+timeout: 180                        # default timeout per eval (seconds)
+model: anthropic/claude-sonnet-4-6  # default evaluator model
+judge: anthropic/claude-opus-4-6    # default judge model
 
 variants:
   - name: verbose-instructions
-    skill_file: variants/verbose.md
+    value: |
+      Write correct, performant SQL with verbose instructions including
+      CTE conventions, explicit JOINs, and dialect-specific guidance.
 
 evals:
   - name: basic-join
@@ -123,18 +117,15 @@ The `description` tells the judge exactly what to evaluate. Be specific -- vague
 Matrix mode runs your evals across multiple evaluator models and judges. This tests whether your skill works across different models and whether scoring is consistent across judges.
 
 ```yaml
-defaults:
-  matrix:
-    evaluators:
-      - provider: anthropic
-        model: claude-sonnet-4-20250514
-      - provider: openai
-        model: gpt-4o
-    judges:
-      - provider: anthropic
-        model: claude-sonnet-4-20250514
-      - provider: anthropic
-        model: claude-opus-4-20250514
+matrix:
+  evaluators:
+    - provider: anthropic
+      model: claude-sonnet-4-6
+    - provider: openai
+      model: gpt-4o
+  judges:
+    - provider: anthropic
+      model: claude-opus-4-6
 
 evals:
   - name: my-eval
@@ -160,10 +151,10 @@ evals:
     matrix:
       evaluators:
         - provider: anthropic
-          model: claude-sonnet-4-20250514
+          model: claude-sonnet-4-6
       judges:
         - provider: anthropic
-          model: claude-opus-4-20250514
+          model: claude-opus-4-6
 ```
 
 ## Variants
@@ -173,9 +164,10 @@ Effectiveness evals support variants just like selection evals. Variants let you
 ```yaml
 variants:
   - name: detailed-examples
-    skill_file: variants/detailed.md
+    value: |
+      Write SQL with detailed examples showing CTEs, window functions, and joins.
   - name: minimal
-    skill_file: variants/minimal.md
+    value: "Write SQL queries."
 
 evals:
   - name: my-eval
@@ -206,7 +198,7 @@ dojo run --eval-type effectiveness
 dojo run --fixture basic-join
 
 # Run with a specific judge
-dojo run --judge anthropic/claude-opus-4-20250514
+dojo run --judge-filter anthropic/claude-opus-4-6
 
 # Combine filters
 dojo run sql-queries --eval-type effectiveness --fixture basic-join
