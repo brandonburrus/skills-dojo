@@ -1,5 +1,25 @@
+run-mode: all
+
+variants:
+  - name: verbose-instructions
+    value: |
+      ---
+      name: verbose-instructions
+      description: Detailed SQL query generation with thorough explanations.
+      ---
+
+      # SQL Queries (Verbose)
+
+      You are an expert SQL developer. When writing queries:
+      1. Always explain your approach step by step
+      2. Consider edge cases (NULLs, empty tables, duplicates)
+      3. Optimize for readability first, then performance
+      4. Support PostgreSQL, Snowflake, BigQuery, Databricks
+      5. Include comments in the SQL explaining each section
+
 evals:
   - name: aggregate-monthly-revenue
+    variants: [terse-instructions, verbose-instructions]
     prompt: "Write a PostgreSQL query that calculates total revenue per month from the orders table. The orders table has columns: id, customer_id, amount (numeric), and created_at (timestamp). Output columns should be month and total_revenue, ordered by month ascending."
     criteria:
       - name: correct-aggregation

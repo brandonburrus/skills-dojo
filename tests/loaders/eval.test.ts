@@ -1,10 +1,10 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { stringify as toYaml } from 'yaml'
 import { EvalValidationError } from '../../src/errors.js'
-import { discoverSelectionFiles } from '../../src/loaders/eval.js'
+import { discoverSelectionFiles, discoverVariants } from '../../src/loaders/eval.js'
 import type { DiscoveredSkill, SkillFrontmatter } from '../../src/types.js'
 
 const validSelectionFile = {
@@ -120,5 +120,72 @@ describe('discoverSelectionFiles', () => {
     expect(results[0].file.variants).toHaveLength(1)
     expect(results[0].file.variants![0].name).toBe('v1')
     expect(results[0].file.evals[0].variants).toEqual(['v1'])
+  })
+})
+
+describe('discoverVariants', () => {
+  let tmpDir: string
+
+  beforeEach(async () => {
+    tmpDir = path.join(tmpdir(), `dojo-variant-test-${Date.now()}`)
+    await mkdir(tmpDir, { recursive: true })
+  })
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true })
+  })
+
+  it('returns empty array when variants dir does not exist', async () => {
+    const result = await discoverVariants(path.join(tmpDir, 'nonexistent'))
+    expect(result).toEqual([])
+  })
+
+  it('discovers valid variant with SKILL.md', async () => {
+    const variantsDir = path.join(tmpDir, 'variants', 'my-variant')
+    await mkdir(variantsDir, { recursive: true })
+    await writeFile(
+      path.join(variantsDir, 'SKILL.md'),
+      `---\nname: my-variant\ndescription: A test variant\n---\n\n# Test`,
+    )
+
+    const result = await discoverVariants(tmpDir)
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe('my-variant')
+    expect(result[0].description).toBe('A test variant')
+    expect(result[0].dirPath).toBe(variantsDir)
+  })
+
+  it('skips directories without SKILL.md', async () => {
+    const variantsDir = path.join(tmpDir, 'variants', 'no-skill')
+    await mkdir(variantsDir, { recursive: true })
+    await writeFile(path.join(variantsDir, 'README.md'), '# Not a skill')
+
+    const result = await discoverVariants(tmpDir)
+    expect(result).toEqual([])
+  })
+
+  it('warns and skips variant with invalid frontmatter', async () => {
+    const variantsDir = path.join(tmpDir, 'variants', 'bad-variant')
+    await mkdir(variantsDir, { recursive: true })
+    await writeFile(path.join(variantsDir, 'SKILL.md'), `---\nname: INVALID NAME!\n---\n\n# Bad`)
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const result = await discoverVariants(tmpDir)
+    expect(result).toEqual([])
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('bad-variant'))
+    warnSpy.mockRestore()
+  })
+
+  it('uses directory name as variant ID regardless of frontmatter name', async () => {
+    const variantsDir = path.join(tmpDir, 'variants', 'dir-name')
+    await mkdir(variantsDir, { recursive: true })
+    await writeFile(
+      path.join(variantsDir, 'SKILL.md'),
+      `---\nname: different-name\ndescription: Test\n---\n\n# Test`,
+    )
+
+    const result = await discoverVariants(tmpDir)
+    expect(result).toHaveLength(1)
+    expect(result[0].name).toBe('dir-name')
   })
 })

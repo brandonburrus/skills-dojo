@@ -20,20 +20,20 @@ function formatVariantMatrix(report: RunReport): string {
   const resultMap = new Map<string, EvalResult>()
 
   for (const result of report.results) {
-    const variant = result.variant ?? 'base'
+    const variant = result.variant ?? 'current'
     if (!evalNames.includes(result.eval)) evalNames.push(result.eval)
     if (!variants.includes(variant)) variants.push(variant)
     resultMap.set(`${result.eval}::${variant}`, result)
   }
 
-  // Sort so 'base' (current) is always first
+  // Sort so 'current' is always first
   variants.sort((a, b) => {
-    if (a === 'base') return -1
-    if (b === 'base') return 1
+    if (a === 'current') return -1
+    if (b === 'current') return 1
     return 0
   })
 
-  const headers = ['Eval', ...variants.map(v => (v === 'base' ? 'current' : v))]
+  const headers = ['Eval', ...variants]
   const table = createTable(headers)
 
   for (const evalName of evalNames) {

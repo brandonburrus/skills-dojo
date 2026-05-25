@@ -7,6 +7,7 @@ import type {
   EffectivenessEvalSchema,
   EffectivenessFileSchema,
   MatrixEntrySchema,
+  RunModeSchema,
   SelectionEvalSchema,
   SelectionFileSchema,
   VariantSchema,
@@ -26,6 +27,7 @@ export type EffectivenessEval = z.infer<typeof EffectivenessEvalSchema>
 export type EffectivenessFile = z.infer<typeof EffectivenessFileSchema>
 export type Criterion = z.infer<typeof CriterionSchema>
 export type MatrixEntry = z.infer<typeof MatrixEntrySchema>
+export type RunMode = z.infer<typeof RunModeSchema>
 
 export interface DiscoveredSkill {
   name: string
@@ -50,6 +52,12 @@ export interface DiscoveredFixture {
   name: string
   testsDir: string
   goldenDir?: string
+}
+
+export interface DiscoveredVariant {
+  name: string
+  dirPath: string
+  description: string
 }
 
 export interface GlobalOptions {
