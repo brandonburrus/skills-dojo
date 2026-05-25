@@ -10,10 +10,15 @@ import {
 import { createTable, heading, truncate } from '../output/cli.js'
 import { getGlobalOptions } from './globals.js'
 
+interface ListOptions {
+  json?: boolean
+}
+
 export async function listCommand(
   startDir?: string,
   overrides?: ConfigOverrides,
   configFile?: string,
+  options?: ListOptions,
 ): Promise<void> {
   const { config, configDir } = await loadConfig(startDir, overrides, configFile)
   const dirs = Array.isArray(config.skills.dir) ? config.skills.dir : [config.skills.dir]
@@ -21,36 +26,9 @@ export async function listCommand(
   const selectionFiles = await discoverSelectionFiles(configDir, skills)
   const effectivenessFiles = await discoverEffectivenessFiles(configDir, skills)
 
-  console.log(heading('\nSkills'))
-  if (skills.length === 0) {
-    console.log('No skills found')
-  } else {
-    const skillTable = createTable(['Name', 'Description'])
-    for (const skill of skills) {
-      skillTable.push([skill.name, truncate(skill.description, 60)])
-    }
-    console.log(skillTable.toString())
-  }
-
   const allEvals = selectionFiles.flatMap(sf =>
     sf.file.evals.map(e => ({ eval_: e, skillName: sf.skillName })),
   )
-
-  console.log(heading('\nSelection Evals'))
-  if (allEvals.length === 0) {
-    console.log('No evals found')
-  } else {
-    const evalTable = createTable(['Name', 'Assert', 'Skill'])
-    for (const { eval_, skillName } of allEvals) {
-      const assert = eval_.assert
-        ? Array.isArray(eval_.assert)
-          ? eval_.assert.join(', ')
-          : eval_.assert
-        : (skillName ?? '(default)')
-      evalTable.push([eval_.name, assert, skillName ?? 'root'])
-    }
-    console.log(evalTable.toString())
-  }
 
   const allEffEvals = await Promise.all(
     effectivenessFiles.map(async ef => {
@@ -64,22 +42,72 @@ export async function listCommand(
     }),
   ).then(results => results.flat())
 
-  console.log(heading('\nEffectiveness Evals'))
+  if (options?.json) {
+    const output = {
+      skills: skills.map(s => ({ name: s.name, description: s.description })),
+      selectionEvals: allEvals.map(({ eval_, skillName }) => ({
+        name: eval_.name,
+        assert: eval_.assert
+          ? Array.isArray(eval_.assert)
+            ? eval_.assert
+            : [eval_.assert]
+          : [skillName ?? '(default)'],
+        skill: skillName ?? 'root',
+      })),
+      effectivenessEvals: allEffEvals.map(e => ({
+        name: e.name,
+        skill: e.skillName,
+        fixtureCount: e.fixtureCount,
+      })),
+    }
+    console.log(JSON.stringify(output, null, 2))
+    return
+  }
+
+  console.error(heading('\nSkills'))
+  if (skills.length === 0) {
+    console.error('No skills found')
+  } else {
+    const skillTable = createTable(['Name', 'Description'])
+    for (const skill of skills) {
+      skillTable.push([skill.name, truncate(skill.description, 60)])
+    }
+    console.error(skillTable.toString())
+  }
+
+  console.error(heading('\nSelection Evals'))
+  if (allEvals.length === 0) {
+    console.error('No evals found')
+  } else {
+    const evalTable = createTable(['Name', 'Assert', 'Skill'])
+    for (const { eval_, skillName } of allEvals) {
+      const assert = eval_.assert
+        ? Array.isArray(eval_.assert)
+          ? eval_.assert.join(', ')
+          : eval_.assert
+        : (skillName ?? '(default)')
+      evalTable.push([eval_.name, assert, skillName ?? 'root'])
+    }
+    console.error(evalTable.toString())
+  }
+
+  console.error(heading('\nEffectiveness Evals'))
   if (allEffEvals.length === 0) {
-    console.log('No effectiveness evals found')
+    console.error('No effectiveness evals found')
   } else {
     const effTable = createTable(['Name', 'Skill', 'Fixtures'])
     for (const { name, skillName, fixtureCount } of allEffEvals) {
       effTable.push([name, skillName, String(fixtureCount)])
     }
-    console.log(effTable.toString())
+    console.error(effTable.toString())
   }
 }
 
 export const list = new Command('list')
   .alias('ls')
   .description('List discovered skills and evals')
-  .action(function (this: Command) {
+  .option('--json', 'Output as JSON to stdout')
+  .action(function (this: Command, options: ListOptions) {
     const { startDir, configFile, overrides } = getGlobalOptions(this)
-    return listCommand(startDir, overrides, configFile)
+    return listCommand(startDir, overrides, configFile, options)
   })

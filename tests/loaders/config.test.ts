@@ -40,7 +40,7 @@ describe('loadConfig', () => {
       'evaluator = "gpt-5"',
       'judge = "claude-3"',
       '[reporting]',
-      'per-skill = false',
+      'perSkill = false',
       'consolidated = true',
     ].join('\n')
     await writeFile(path.join(tmpDir, 'dojo.toml'), toml)
@@ -49,7 +49,7 @@ describe('loadConfig', () => {
     expect(result.config.model.provider).toBe('openai')
     expect(result.config.model.evaluator).toBe('gpt-5')
     expect(result.config.model.judge).toBe('claude-3')
-    expect(result.config.reporting['per-skill']).toBe(false)
+    expect(result.config.reporting.perSkill).toBe(false)
     expect(result.config.reporting.consolidated).toBe(true)
   })
 

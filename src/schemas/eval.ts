@@ -1,4 +1,5 @@
 import { z } from 'zod/v4'
+import { SUPPORTED_PROVIDERS } from './config.js'
 
 export const DecoySchema = z.object({
   name: z.string().describe('Name of the decoy skill.'),
@@ -54,9 +55,7 @@ export const SelectionEvalSchema = z.object({
 })
 
 export const MatrixEntrySchema = z.object({
-  provider: z
-    .enum(['copilot', 'openai', 'anthropic', 'vercel'])
-    .describe('The model provider to use.'),
+  provider: z.enum(SUPPORTED_PROVIDERS).describe('The model provider to use.'),
   model: z.string().describe('The model identifier (e.g. "claude-sonnet-4-6", "gpt-4o").'),
 })
 

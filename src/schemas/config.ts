@@ -42,13 +42,13 @@ const ModelSectionSchema = z.object({
 })
 
 const EffectivenessSectionSchema = z.object({
-  warn_fixture_threshold: z
+  warnFixtureThreshold: z
     .number()
     .positive()
     .optional()
     .default(4)
     .describe('Print a warning when a skill has more fixtures than this.'),
-  confirm_fixture_threshold: z
+  confirmFixtureThreshold: z
     .number()
     .positive()
     .optional()
@@ -57,7 +57,7 @@ const EffectivenessSectionSchema = z.object({
 })
 
 const ReportingSectionSchema = z.object({
-  'per-skill': z
+  perSkill: z
     .boolean()
     .default(true)
     .describe('Write a separate report for each skill under its evals/reports/ directory.'),

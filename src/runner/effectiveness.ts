@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { readFile, readdir } from 'node:fs/promises'
+import { readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod/v4'
 import type { Judge, JudgeInput, EffectivenessResult } from '../providers/types.js'
@@ -235,8 +235,8 @@ async function readGoldenReference(
     files = []
     for (const entry of entries) {
       const fullPath = path.join(filesDir, entry)
-      const stat = await import('node:fs/promises').then(fs => fs.stat(fullPath))
-      if (!stat.isFile()) continue
+      const fileStat = await stat(fullPath)
+      if (!fileStat.isFile()) continue
       const content = await readFile(fullPath, 'utf-8')
       files.push({ path: entry, content })
     }

@@ -95,7 +95,7 @@ export async function validateCommand(
   }
 
   if (!hasErrors) {
-    console.log(
+    console.error(
       chalk.blueBright(
         `\nValidated ${skills.length} skill${skills.length === 1 ? '' : 's'}, ${evalCount} selection eval${evalCount === 1 ? '' : 's'}, ${effEvalCount} effectiveness eval${effEvalCount === 1 ? '' : 's'}`,
       ),
