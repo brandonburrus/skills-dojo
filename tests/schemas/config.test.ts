@@ -32,11 +32,11 @@ describe('DojoConfigSchema', () => {
     const result = DojoConfigSchema.parse({
       skills: { dir: ['/custom/'] },
       model: { provider: 'openai', evaluator: 'gpt-5', judge: 'claude-3' },
-      reporting: { 'per-skill': false, consolidated: true },
+      reporting: { perSkill: false, consolidated: true },
     })
     expect(result.skills.dir).toEqual(['/custom/'])
     expect(result.model.provider).toBe('openai')
-    expect(result.reporting['per-skill']).toBe(false)
+    expect(result.reporting.perSkill).toBe(false)
     expect(result.reporting.consolidated).toBe(true)
   })
 

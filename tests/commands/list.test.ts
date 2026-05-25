@@ -22,7 +22,7 @@ describe('listCommand', () => {
 
   beforeEach(async () => {
     tmpDir = await mkdtemp(join(tmpdir(), 'dojo-list-test-'))
-    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(async () => {
@@ -41,7 +41,7 @@ describe('listCommand', () => {
       config: {
         skills: { dir: ['skills/'] },
         model: { provider: 'copilot', evaluator: 'gpt-4o-mini', judge: 'gpt-4o-mini' },
-        reporting: { 'per-skill': true, consolidated: false },
+        reporting: { perSkill: true, consolidated: false },
       },
       configDir: tmpDir,
     })
@@ -59,7 +59,7 @@ describe('listCommand', () => {
       config: {
         skills: { dir: ['skills/'] },
         model: { provider: 'copilot', evaluator: 'gpt-4o-mini', judge: 'gpt-4o-mini' },
-        reporting: { 'per-skill': true, consolidated: false },
+        reporting: { perSkill: true, consolidated: false },
       },
       configDir: tmpDir,
     })

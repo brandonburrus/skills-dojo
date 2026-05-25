@@ -6,10 +6,10 @@ import chalk from 'chalk'
 type EvalResult = RunReport['results'][number]
 
 function formatFlatReport(report: RunReport): string {
-  const table = createTable(['', 'Eval', 'Expected', 'Actual'])
+  const table = createTable(['Eval', 'Expected', 'Actual', 'Result'])
   for (const result of report.results) {
     const actual = result.actual.loaded ? (result.actual.skillName ?? 'none') : 'none'
-    table.push([statusLabel(result.passed), result.eval, result.expected, actual])
+    table.push([result.eval, result.expected, actual, statusLabel(result.passed)])
   }
   return table.toString()
 }
@@ -52,12 +52,14 @@ export function formatRunReport(report: RunReport): string {
   const header = `Skill Selection: ${chalk.bold.blueBright(report.skill)}`
   const hasVariants = report.results.some(r => r.variant !== undefined)
   const body = hasVariants ? formatVariantMatrix(report) : formatFlatReport(report)
-  return `${header}\n${body}`
+  const passed = report.results.filter(r => r.passed).length
+  const total = report.results.length
+  const lines = [header, body, `${passed}/${total} passed`]
+  return lines.join('\n')
 }
 
 export function formatEffectivenessReport(
   skillName: string,
-  _runId: string,
   results: EffectivenessEvalResult[],
 ): string {
   const header = `Skill Effectiveness: ${chalk.bold.blueBright(skillName)}`

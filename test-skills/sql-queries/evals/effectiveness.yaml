@@ -8,9 +8,16 @@ evals:
       - name: correct-date-truncation
         description: "The query uses date_trunc('month', created_at) or equivalent to extract the month, not just EXTRACT(MONTH ...) which loses the year."
         pass_threshold: 0.8
-      - name: proper-ordering
-        description: "Results are ordered by month ascending so output is chronological."
-        pass_threshold: 0.9
       - name: valid-postgresql-syntax
         description: "The query uses valid PostgreSQL syntax that would execute without errors on a standard PostgreSQL 15+ database."
         pass_threshold: 0.9
+
+  - name: window-function-ranking
+    prompt: "Write a PostgreSQL query that ranks customers by their total spending. The orders table has columns: id, customer_id, amount (numeric), and created_at (timestamp). Output columns should be customer_id, total_spent, and spend_rank (using RANK()). Only include customers with at least 2 orders. Order by rank ascending."
+    criteria:
+      - name: correct-window-function
+        description: "The query uses RANK() window function (or DENSE_RANK()) ordered by total spending descending to assign rankings."
+        pass_threshold: 0.8
+      - name: correct-filtering
+        description: "The query correctly filters to customers with at least 2 orders using HAVING COUNT(*) >= 2, not WHERE on the aggregate."
+        pass_threshold: 0.8

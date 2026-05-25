@@ -18,13 +18,9 @@
       },
       "suspicious": {
         "noUnknownAtRules": "off"
-      },
-      "nursery": {
-        "useSortedClasses": "warn"
       }
     },
     "domains": {
-      "react": "recommended",
       "test": "recommended"
     }
   },

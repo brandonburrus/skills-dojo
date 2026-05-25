@@ -1,7 +1,0 @@
-evals:
-  - name: should-select-code-review
-    prompt: "Review this pull request for potential security issues and suggest improvements."
-
-  - name: should-not-select-code-review
-    prompt: "Write a Python function that calculates the Fibonacci sequence."
-    assert: none

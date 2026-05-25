@@ -146,6 +146,8 @@ export async function runCommand(
     judgeFilter?: string
     keepSandbox?: boolean
     yes?: boolean
+    json?: boolean
+    quiet?: boolean
   },
   startDir?: string,
   overrides?: ConfigOverrides,
@@ -250,6 +252,7 @@ export async function runCommand(
   }
 
   let aborted = false
+  const startTime = Date.now()
 
   try {
     // --- Preflight: validate effectiveness eval prerequisites early ---
@@ -348,9 +351,11 @@ export async function runCommand(
       }
     }
 
-    console.error(dojoBanner())
-    console.error(heading(`Starting run: ${chalk.italic.blueBright(runId)}`))
-    console.error('')
+    if (!options.quiet) {
+      console.error(dojoBanner())
+      console.error(heading(`Starting run: ${chalk.italic.blueBright(runId)}`))
+      console.error('')
+    }
 
     // --- Effectiveness cost preflight and threshold checks (before Listr run) ---
     if (effectivenessWorkItems.length > 0) {
@@ -375,17 +380,17 @@ export async function runCommand(
       const activeSkillNames = new Set(effectivenessWorkItems.map(i => i.skillName))
       for (const s of skills.filter(s => activeSkillNames.has(s.name))) {
         const sf = fixturesMap.get(s.name) ?? []
-        if (sf.length > config.effectiveness.confirm_fixture_threshold && !options.yes) {
+        if (sf.length > config.effectiveness.confirmFixtureThreshold && !options.yes) {
           console.error(
             errorText(
-              `\u2716 Skill "${s.name}" has ${sf.length} fixtures (> confirm threshold of ${config.effectiveness.confirm_fixture_threshold}). Use --yes to proceed.`,
+              `\u2716 Skill "${s.name}" has ${sf.length} fixtures (> confirm threshold of ${config.effectiveness.confirmFixtureThreshold}). Use --yes to proceed.`,
             ),
           )
           shouldAbort = true
-        } else if (sf.length > config.effectiveness.warn_fixture_threshold) {
+        } else if (sf.length > config.effectiveness.warnFixtureThreshold) {
           console.error(
             chalk.yellow(
-              `\u26a0 Skill "${s.name}" has ${sf.length} fixtures (> warn threshold of ${config.effectiveness.warn_fixture_threshold})`,
+              `\u26a0 Skill "${s.name}" has ${sf.length} fixtures (> warn threshold of ${config.effectiveness.warnFixtureThreshold})`,
             ),
           )
         }
@@ -527,6 +532,13 @@ export async function runCommand(
           renderer: 'verbose',
           fallbackRenderer: 'simple',
         })
+      } else if (options.quiet) {
+        // biome-ignore lint/suspicious/noExplicitAny: listr2 renderer types require exact literal match
+        tasks = new Listr<UnifiedListrContext, any, any>(allTaskItems, {
+          ...sharedOptions,
+          renderer: 'silent',
+          fallbackRenderer: 'silent',
+        })
       } else {
         // biome-ignore lint/suspicious/noExplicitAny: listr2 renderer types require exact literal match
         tasks = new Listr<UnifiedListrContext, any, any>(allTaskItems, {
@@ -630,13 +642,32 @@ export async function runCommand(
           )
 
           console.error('')
-          console.error(formatEffectivenessReport(skillName ?? 'root', runId, skillResults))
+          console.error(formatEffectivenessReport(skillName ?? 'root', skillResults))
         }
+      }
+
+      const hasSelectionFailures = ctx.selectionResults.some(r => !r.passed)
+      const hasEffectivenessFailures = ctx.effectivenessResults.some(r => !r.passed || r.error)
+      if (hasSelectionFailures || hasEffectivenessFailures) {
+        process.exitCode = 1
+      }
+
+      if (options.json) {
+        const combined = {
+          runId,
+          timestamp: new Date().toISOString(),
+          selection: ctx.selectionResults,
+          effectiveness: ctx.effectivenessResults,
+        }
+        console.log(JSON.stringify(combined, null, 2))
       }
     }
 
+    console.error(`\nCompleted in ${((Date.now() - startTime) / 1000).toFixed(1)}s`)
+
     if (aborted) {
       console.error(errorText('Run interrupted.'))
+      process.exitCode = 1
     }
   } finally {
     process.removeListener('SIGINT', sigintHandler)
@@ -660,6 +691,8 @@ interface RunOptions {
   judgeFilter?: string
   keepSandbox?: boolean
   yes?: boolean
+  json?: boolean
+  quiet?: boolean
 }
 
 export const run = new Command('run')
@@ -685,6 +718,8 @@ export const run = new Command('run')
   .option('--judge-filter <id>', 'Filter to a specific judge (format: "provider/model")')
   .option('--keep-sandbox', "Don't clean up sandbox temp directories after run")
   .option('-y, --yes', 'Skip confirmation prompts for large eval runs')
+  .option('--json', 'Output combined report as JSON to stdout')
+  .option('-q, --quiet', 'Suppress progress output (still shows results)')
   .addHelpText(
     'after',
     `
