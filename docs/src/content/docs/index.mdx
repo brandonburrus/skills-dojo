@@ -23,6 +23,9 @@ import { Aside } from '@astrojs/starlight/components';
   <Card title="Selection Evals" icon="approve-check-circle">
     Test whether an agent selects the correct skill for a given scenario.
   </Card>
+  <Card title="Effectiveness Evals" icon="star">
+    Test whether a skill actually helps an agent produce correct output using LLM-as-a-judge scoring.
+  </Card>
   <Card title="Variants" icon="random">
     Define alternative descriptions for a skill and evaluate if the agent still selects it.
   </Card>
@@ -56,9 +59,9 @@ Vercel Report: [AGENTS.md outperforms skills in our agent evals](https://vercel.
 ## How It Works
 
 1. **Define skills** -- Each skill is a directory with a `SKILL.md` file containing frontmatter (name, description) and instructions.
-2. **Write evals** -- YAML files in a skill's `evals/` directory define prompts, variants, and expected outcomes.
-3. **Run** -- Dojo presents the given eval prompt and available skills to an evaluator model in a sandbox environment, and tracks which skills the model selects.
-4. **Assert** -- Dojo checks whether the agent's choice matches your assertion: a specific skill, any skill, or no skill at all.
+2. **Write evals** -- YAML files in a skill's `evals/` directory define prompts, variants, and expected outcomes. Selection evals test whether the agent picks the right skill; effectiveness evals test whether the skill helps the agent produce correct output.
+3. **Run** -- Dojo presents the given eval prompt and available skills to an evaluator model in a sandbox environment. For selection evals, it tracks which skill the model selects. For effectiveness evals, it runs the agent with real tools and judges the output against your criteria.
+4. **Assert** -- Selection evals check whether the agent's choice matches your assertion. Effectiveness evals check whether the judge's scores meet your pass thresholds.
 5. **Analyze** -- For every eval run, Dojo generates a detailed report and captures model reasoning logs for analysis and debugging. This allows you to understand why an agent made a particular selection and iterate on your skill descriptions and instructions accordingly.
 
 <br />

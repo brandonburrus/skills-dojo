@@ -1,6 +1,6 @@
 ---
 title: "Eval File Reference"
-description: "Reference for the selection eval YAML file format."
+description: "Reference for selection and effectiveness eval YAML file formats."
 ---
 
 :::note
@@ -36,3 +36,48 @@ Schema for individual eval entries within the `evals` array.
 | `assert` | `string[]` \| `"none"` \| `"any"` | No | - | Expected skill selection. An array of skill names, "none" if no skill should load, or "any" to accept any selection. Defaults to the owning skill for skill-scoped evals. |
 | `variants` | `"all"` \| `string[]` \| `Variant[]` | No | `"all"` | Variants to run: "all" uses file-level variants, or specify inline/by name. |
 | `decoys` | `Decoy[]` | No | - | Decoy skills to register alongside real skills for this eval. |
+
+## Effectiveness File
+
+Top-level schema for effectiveness eval YAML files.
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `timeout` | `number` | No | `120` | Default timeout in seconds. |
+| `defaults` | `object` | No | - | Default settings applied to all evals. |
+| `defaults.matrix` | `object` | No | - | Default matrix configuration. |
+| `variants` | `Variant[]` | No | - | Variant definitions available to evals. |
+| `evals` | `EffectivenessEval[]` | Yes | - | List of effectiveness evals to run. |
+
+## Effectiveness Eval
+
+Schema for individual eval entries within the `evals` array of an effectiveness file.
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `name` | `string` | Yes | - | Unique name for this eval. |
+| `prompt` | `string` | Yes | - | The prompt to send to the agent in the sandbox. |
+| `enabled` | `boolean` | No | `true` | Whether this eval is active. |
+| `timeout` | `number` | No | file-level | Timeout in seconds. Overrides file-level default. |
+| `fixtures` | `string[]` | No | all fixtures | Fixture names to run against. |
+| `criteria` | `Criterion[]` | Yes | - | Criteria the judge evaluates. All must pass. |
+| `variants` | `"all"` \| `string[]` \| `Variant[]` | No | `"all"` | Variants to run. |
+| `matrix` | `object` | No | - | Override the matrix for this eval. |
+
+## Criterion
+
+Schema for individual criteria within the `criteria` array.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | `string` | Yes | Name of the criterion to evaluate. |
+| `pass_threshold` | `number` (0-1) | Yes | Minimum score for this criterion to pass. |
+
+## Matrix Entry
+
+Schema for entries in the `evaluators` and `judges` arrays within a matrix configuration.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `provider` | `"copilot"` \| `"openai"` \| `"anthropic"` \| `"vercel"` | Yes | Model provider. |
+| `model` | `string` | Yes | Model identifier. |

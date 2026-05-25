@@ -23,3 +23,33 @@ export const RunReportSchema = z.object({
   failed: z.number(),
   results: z.array(EvalResultSchema),
 })
+
+const CriterionResultSchema = z.object({
+  name: z.string(),
+  score: z.number(),
+  passed: z.boolean(),
+  reasoning: z.string(),
+})
+
+const EffectivenessEvalResultSchema = z.object({
+  eval: z.string(),
+  fixture: z.string(),
+  evaluator: z.string(),
+  judge: z.string(),
+  variant: z.string().optional(),
+  skillName: z.string().nullable(),
+  passed: z.boolean(),
+  criteria: z.array(CriterionResultSchema),
+  durationMs: z.number(),
+  error: z.string().optional(),
+})
+
+export const EffectivenessRunReportSchema = z.object({
+  runId: z.string(),
+  timestamp: z.iso.datetime(),
+  skill: z.string(),
+  totalEvals: z.number(),
+  passed: z.number(),
+  failed: z.number(),
+  results: z.array(EffectivenessEvalResultSchema),
+})

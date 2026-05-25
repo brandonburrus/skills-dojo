@@ -53,6 +53,65 @@ export const SelectionEvalSchema = z.object({
     .describe('Decoy skills to register alongside real skills for this eval.'),
 })
 
+export const MatrixEntrySchema = z.object({
+  provider: z.enum(['copilot', 'openai', 'anthropic', 'vercel']),
+  model: z.string(),
+})
+
+export const CriterionSchema = z.object({
+  name: z.string().min(1).max(200).describe('Name of the criterion to evaluate.'),
+  pass_threshold: z
+    .number()
+    .min(0)
+    .max(1)
+    .describe('Minimum score (0-1) for this criterion to pass.'),
+})
+
+export const EffectivenessMatrixSchema = z.object({
+  evaluators: z
+    .array(MatrixEntrySchema)
+    .optional()
+    .describe('Evaluator models to run the agent with.'),
+  judges: z.array(MatrixEntrySchema).optional().describe('Judge models to score the output.'),
+})
+
+export const EffectivenessEvalSchema = z.object({
+  name: z.string().min(1).max(100).describe('Unique name for this eval.'),
+  prompt: z.string().min(1).describe('The prompt to send to the agent in the sandbox.'),
+  enabled: z.boolean().optional().default(true).describe('Whether this eval is active.'),
+  timeout: z
+    .number()
+    .positive()
+    .optional()
+    .describe('Timeout in seconds. Overrides file-level default.'),
+  fixtures: z
+    .array(z.string())
+    .optional()
+    .describe('Fixture names to run against. Default: all fixtures.'),
+  criteria: z
+    .array(CriterionSchema)
+    .min(1)
+    .describe('Criteria the judge evaluates. All must pass.'),
+  variants: z
+    .union([z.literal('all'), z.array(z.string()), z.array(VariantSchema)])
+    .optional()
+    .default('all')
+    .describe('Variants to run.'),
+  matrix: EffectivenessMatrixSchema.optional().describe('Override the matrix for this eval.'),
+})
+
+export const EffectivenessFileSchema = z.object({
+  timeout: z.number().positive().optional().default(120).describe('Default timeout in seconds.'),
+  defaults: z
+    .object({
+      matrix: EffectivenessMatrixSchema.optional(),
+    })
+    .optional()
+    .describe('Default settings applied to all evals.'),
+  variants: z.array(VariantSchema).optional().describe('Variant definitions available to evals.'),
+  evals: z.array(EffectivenessEvalSchema).describe('List of effectiveness evals to run.'),
+})
+
 export const SelectionFileSchema = z.object({
   model: z.string().optional().describe('Default model for all evals in this file.'),
   timeout: z

@@ -1,0 +1,17 @@
+defaults:
+  matrix:
+    evaluators:
+      - { provider: anthropic, model: claude-sonnet-4-5 }
+    judges:
+      - { provider: anthropic, model: claude-sonnet-4-5 }
+
+evals:
+  - name: identifies-sql-injection
+    prompt: "Review the code in this project for security vulnerabilities and provide a detailed report."
+    criteria:
+      - name: "identifies SQL injection vulnerability"
+        pass_threshold: 0.8
+      - name: "provides actionable remediation advice"
+        pass_threshold: 0.7
+      - name: "does not produce false positives"
+        pass_threshold: 0.6

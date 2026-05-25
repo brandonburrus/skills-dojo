@@ -16,6 +16,7 @@ Schema for the `dojo.toml` configuration file.
 | `skills` | `object` | No | `{"dir":["skills",".agents/skills",".github/skills",".claude/skills",".codex/skills",".gemini/skills",".openclaw/skills",".opencode/skills"]}` | Configuration for skill discovery. |
 | `model` | `object` | No | `{"provider":"anthropic"}` | Model provider and model selection for evaluations. |
 | `reporting` | `object` | No | `{"per-skill":true,"consolidated":false}` | Controls how and where eval reports are written. |
+| `effectiveness` | `object` | No | `{"warn_fixture_threshold":4,"confirm_fixture_threshold":12}` | Configuration for effectiveness evals. |
 
 #### `skills` fields
 
@@ -37,3 +38,10 @@ Schema for the `dojo.toml` configuration file.
 |-------|------|----------|---------|-------------|
 | `per-skill` | `boolean` | No | `true` | Write a separate report for each skill under its evals/reports/ directory. |
 | `consolidated` | `boolean` | No | `false` | Write a single consolidated report combining all skills. |
+
+#### `effectiveness` fields
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `warn_fixture_threshold` | `number` | No | `4` | Print a warning when a skill has more fixtures than this. |
+| `confirm_fixture_threshold` | `number` | No | `12` | Require --yes confirmation when a skill has more fixtures than this. |

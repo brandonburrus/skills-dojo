@@ -41,6 +41,21 @@ const ModelSectionSchema = z.object({
     .describe("Model to use for judging eval results. Defaults to the provider's default model."),
 })
 
+const EffectivenessSectionSchema = z.object({
+  warn_fixture_threshold: z
+    .number()
+    .positive()
+    .optional()
+    .default(4)
+    .describe('Print a warning when a skill has more fixtures than this.'),
+  confirm_fixture_threshold: z
+    .number()
+    .positive()
+    .optional()
+    .default(12)
+    .describe('Require --yes confirmation when a skill has more fixtures than this.'),
+})
+
 const ReportingSectionSchema = z.object({
   'per-skill': z
     .boolean()
@@ -59,6 +74,9 @@ export const DojoConfigSchema = z.object({
   model: ModelSectionSchema.default(() => ModelSectionSchema.parse({})).describe(
     'Model provider and model selection for evaluations.',
   ),
+  effectiveness: EffectivenessSectionSchema.default(() =>
+    EffectivenessSectionSchema.parse({}),
+  ).describe('Configuration for effectiveness evals.'),
   reporting: ReportingSectionSchema.default(() => ReportingSectionSchema.parse({})).describe(
     'Controls how and where eval reports are written.',
   ),

@@ -46,6 +46,11 @@ dojo run [skill] [options]
 | `--no-parallelism` | Run evals sequentially | - |
 | `-o, --output <path>` | Write combined report to file | - |
 | `-i, --inspect` | Show key session events (model, prompt, tool calls, errors). Full event stream is written to logs.json. | - |
+| `--eval-type <type>` | Filter by eval type: "selection", "effectiveness", or "all" | `all` |
+| `--fixture <name>` | Filter effectiveness evals to a specific fixture | - |
+| `--judge <id>` | Filter to a specific judge (format: "provider/model") | - |
+| `--keep-sandbox` | Don't clean up sandbox temp directories after run | - |
+| `--yes` | Skip confirmation prompts for large eval runs | - |
 ### `dojo list` (alias: `ls`)
 
 List all discovered skills and evals in a tabular format.

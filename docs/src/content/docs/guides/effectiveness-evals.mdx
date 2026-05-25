@@ -1,0 +1,232 @@
+---
+title: Effectiveness Evals
+description: Test whether a skill actually helps an agent produce correct output using LLM-as-a-judge scoring.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+A skill can be perfectly selected but still produce garbage output. Selection evals verify that the agent picks the right skill -- effectiveness evals verify that the skill actually helps the agent do the job correctly.
+
+Effectiveness evals work by running an agent in a sandboxed subprocess with the skill preloaded, then having an LLM judge score the output against criteria you define.
+
+## File structure
+
+```
+skills/
+  sql-queries/
+    SKILL.md
+    evals/
+      selection.yaml         # selection evals (optional)
+      effectiveness.yaml     # effectiveness evals
+      fixtures/
+        basic-join/
+          tests/             # copied into sandbox as agent's cwd
+            schema.sql
+            setup.sh         # optional: runs before the agent
+          golden/
+            notes.md         # optional: freeform reference for judge
+            files/           # optional: reference file state
+              expected.sql
+      reports/
+        <run-id>/
+          report.json
+          logs.json
+```
+
+## The effectiveness.yaml file
+
+```yaml
+timeout: 180                  # default timeout per eval (seconds)
+
+defaults:
+  matrix:
+    evaluators:
+      - provider: anthropic
+        model: claude-sonnet-4-20250514
+    judges:
+      - provider: anthropic
+        model: claude-sonnet-4-20250514
+
+variants:
+  - name: verbose-instructions
+    skill_file: variants/verbose.md
+
+evals:
+  - name: basic-join
+    prompt: "Write a SQL query that joins users and orders tables on user_id"
+    criteria:
+      - name: correct-join-syntax
+        pass_threshold: 0.8
+      - name: uses-explicit-join
+        pass_threshold: 0.7
+    fixtures:
+      - basic-join
+```
+
+## How the sandbox works
+
+Each effectiveness eval spawns a subprocess where the agent runs with:
+
+- The full skill directory available (SKILL.md, scripts/, references/, assets/)
+- Real tools: `bash`, `read_file`, `write_file`, `list_files`
+- A temp directory as its working directory, populated from the fixture's `tests/` folder
+
+The agent receives your `prompt` and works with the fixture files to produce output. After the agent finishes (or times out), the sandbox captures the final filesystem state for judging.
+
+<Aside type="caution">
+The sandbox runs real shell commands. Avoid fixtures that require network access or install system packages -- keep them self-contained.
+</Aside>
+
+## Fixtures
+
+Fixtures provide the starting environment for the agent. Each fixture is a subdirectory under `evals/fixtures/`.
+
+### `tests/` directory
+
+Files in `tests/` are copied into the agent's working directory before it runs. This is where you place input files the agent needs to work with.
+
+If a `tests/setup.sh` file exists, it runs before the agent starts. Use it to create databases, generate files, or set up state that can't be expressed as static files.
+
+### `golden/` directory
+
+The `golden/` directory provides reference material to the judge -- not to the agent. The agent never sees these files.
+
+- **`golden/notes.md`** -- Freeform notes for the judge explaining what correct output looks like, edge cases to watch for, or grading guidance.
+- **`golden/files/`** -- Reference file state. The judge can compare the agent's output against these files.
+
+<Aside type="tip">
+Golden files are optional. For simple criteria like "file exists" or "code compiles," the judge can evaluate without reference material. Use golden files when correctness is nuanced.
+</Aside>
+
+## Criteria
+
+Each eval defines one or more criteria that the judge evaluates. All criteria must pass for the eval to pass.
+
+```yaml
+criteria:
+  - name: correct-output
+    pass_threshold: 0.9
+  - name: no-hardcoded-values
+    pass_threshold: 0.7
+```
+
+The `pass_threshold` is a score from 0 to 1. The judge assigns a score for each criterion, and the criterion passes if the score meets or exceeds the threshold.
+
+Criterion names should be descriptive -- the judge uses them (along with golden material) to understand what to evaluate.
+
+## Matrix mode
+
+Matrix mode runs your evals across multiple evaluator models and judges. This tests whether your skill works across different models and whether scoring is consistent across judges.
+
+```yaml
+defaults:
+  matrix:
+    evaluators:
+      - provider: anthropic
+        model: claude-sonnet-4-20250514
+      - provider: openai
+        model: gpt-4o
+    judges:
+      - provider: anthropic
+        model: claude-sonnet-4-20250514
+      - provider: anthropic
+        model: claude-opus-4-20250514
+
+evals:
+  - name: my-eval
+    prompt: "..."
+    criteria:
+      - name: correct
+        pass_threshold: 0.8
+```
+
+The matrix expands as: each eval x each fixture x each evaluator. Agent runs are independent of judges -- one agent run fans out to all judges for scoring. This means adding judges is cheap (no additional agent runs).
+
+You can override the matrix at the eval level:
+
+```yaml
+evals:
+  - name: expensive-eval
+    prompt: "..."
+    criteria:
+      - name: correct
+        pass_threshold: 0.9
+    matrix:
+      evaluators:
+        - provider: anthropic
+          model: claude-sonnet-4-20250514
+      judges:
+        - provider: anthropic
+          model: claude-opus-4-20250514
+```
+
+## Variants
+
+Effectiveness evals support variants just like selection evals. Variants let you test different versions of your SKILL.md to see which produces better agent output.
+
+```yaml
+variants:
+  - name: detailed-examples
+    skill_file: variants/detailed.md
+  - name: minimal
+    skill_file: variants/minimal.md
+
+evals:
+  - name: my-eval
+    prompt: "..."
+    criteria:
+      - name: correct
+        pass_threshold: 0.8
+    variants: all              # run against all variants (default)
+```
+
+You can also restrict to specific variants:
+
+```yaml
+    variants:
+      - detailed-examples
+```
+
+## Runtime filtering
+
+You don't need to edit YAML to run a subset of effectiveness evals. Use CLI flags:
+
+```bash
+# Run only effectiveness evals
+dojo run --eval-type effectiveness
+
+# Run a specific fixture
+dojo run --fixture basic-join
+
+# Run with a specific judge
+dojo run --judge anthropic/claude-opus-4-20250514
+
+# Combine filters
+dojo run sql-queries --eval-type effectiveness --fixture basic-join
+
+# Keep sandbox directories for debugging
+dojo run --eval-type effectiveness --keep-sandbox
+```
+
+## Cost guardrails
+
+Effectiveness evals are more expensive than selection evals -- each run involves an agent session plus one or more judge calls. Matrix mode multiplies this further.
+
+Dojo includes built-in guardrails:
+
+- **Warning threshold** (default: 4 fixtures per skill) -- Prints a warning when a skill has many fixtures.
+- **Confirmation threshold** (default: 12 fixtures per skill) -- Requires `--yes` to proceed without interactive confirmation.
+
+Configure these in `dojo.toml`:
+
+```toml
+[effectiveness]
+warn_fixture_threshold = 4
+confirm_fixture_threshold = 12
+```
+
+Or skip confirmation entirely:
+
+```bash
+dojo run --yes
+```

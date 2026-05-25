@@ -1,4 +1,5 @@
 import type { RunReport } from '../types.js'
+import type { EffectivenessEvalResult } from '../runner/effectiveness.js'
 import { createTable, statusLabel } from './cli.js'
 import chalk from 'chalk'
 
@@ -52,4 +53,32 @@ export function formatRunReport(report: RunReport): string {
   const hasVariants = report.results.some(r => r.variant !== undefined)
   const body = hasVariants ? formatVariantMatrix(report) : formatFlatReport(report)
   return `${header}\n${body}`
+}
+
+export function formatEffectivenessReport(
+  skillName: string,
+  runId: string,
+  results: EffectivenessEvalResult[],
+): string {
+  const header = `Effectiveness: ${chalk.bold.blueBright(skillName)} (run: ${runId})`
+  const table = createTable(['Eval', 'Fixture', 'Evaluator', 'Judge', 'Result'])
+
+  for (const result of results) {
+    table.push([
+      result.eval,
+      result.fixture,
+      result.evaluator,
+      result.judge,
+      statusLabel(result.passed),
+    ])
+  }
+
+  const totalCriteria = results.reduce((sum, r) => sum + r.criteria.length, 0)
+  const passedCriteria = results.reduce(
+    (sum, r) => sum + r.criteria.filter(c => c.passed).length,
+    0,
+  )
+  const summary = `${passedCriteria}/${totalCriteria} criteria passed`
+
+  return `${header}\n${table.toString()}\n${summary}`
 }
