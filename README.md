@@ -4,7 +4,7 @@ A toolkit for testing, evaluating, and improving AI agent skills.
 
 Skills follow the [Agent Skills specification](https://agentskills.io/specification).
 
-Dojo's current focus is **selection evals** — testing whether an agent correctly decides to load (or not load) a skill given a user prompt. Instead of asking the agent "which skill would you pick?", Dojo registers a `load_skill` tool and observes whether the agent calls it. This tests real decision-making behavior.
+Dojo supports **selection evals** (does the agent load the right skill?) and **effectiveness evals** (does the skill actually help the agent produce correct output?). Selection evals register a `load_skill` tool and observe whether the agent calls it; effectiveness evals run the agent in a sandbox and have an LLM judge score the results.
 
 ![Example run output](example.png)
 
@@ -13,6 +13,8 @@ Dojo's current focus is **selection evals** — testing whether an agent correct
 ```bash
 npm install -g skills-dojo
 ```
+
+### Selection Eval
 
 Create a skill with a `SKILL.md` file and a `selection.yaml` eval file:
 
@@ -51,7 +53,38 @@ evals:
 
 When `assert` is omitted, it defaults to the skill the eval lives under (e.g. `code-review`). Use `assert: none` to test that the agent does _not_ select the skill.
 
-Run the evals:
+### Effectiveness Eval
+
+Add an `effectiveness.yaml` and fixtures:
+
+```
+skills/
+  sql-queries/
+    SKILL.md
+    evals/
+      selection.yaml
+      effectiveness.yaml
+      fixtures/
+        aggregate-query/
+          tests/
+            schema.sql
+          golden/
+            notes.md
+```
+
+`skills/sql-queries/evals/effectiveness.yaml`:
+
+```yaml
+evals:
+  - name: aggregate-monthly-revenue
+    prompt: "Write a SQL query that calculates total revenue per month from the orders table."
+    criteria:
+      - Uses GROUP BY with a date function
+      - Returns both month and revenue columns
+      - Handles NULL values appropriately
+```
+
+### Run evals
 
 ```bash
 dojo run
@@ -106,28 +139,48 @@ evals:
 
 Variants can also define decoys. When both exist, they are merged (deduplicated by name).
 
+## Effectiveness Evals
+
+Effectiveness evals test whether a skill actually helps an agent produce correct output.
+
+- The agent runs in a **sandboxed temp directory** with real tools (`bash`, `read_file`, `write_file`, `list_files`).
+- **Fixtures** provide test scenarios: the `tests/` directory is copied as the agent's working directory. An optional `tests/setup.sh` runs before the agent starts.
+- An **LLM judge** scores the agent's output against user-defined criteria. Optional `golden/` material (notes, reference files) calibrates the judge.
+- **Matrix support**: run N evaluators x M judges per eval. Agent runs fan out to judges — one agent run produces N judge scores.
+
+See [skillsdojo.dev](https://skillsdojo.dev) for full effectiveness eval documentation.
+
 ## CLI
 
 ```
-dojo run [skill]          Run evals, optionally filtering by skill name (glob)
-  -e, --eval <name>       Filter by eval name (glob)
-  -V, --variant <name>    Run only a specific variant by name (glob)
-  -p, --parallelism <n>   Max concurrent eval runs (default: CPU cores)
-  --no-parallelism        Run evals sequentially
-  -o, --output <path>     Write combined report JSON
-  -i, --inspect           Show session events (model, prompt, tool calls)
+dojo run [skill]              Run evals, optionally filtering by skill name
+  -e, --eval <name>           Filter by eval name
+  -V, --variant <name>        Run only a specific variant by name
+  -t, --eval-type <type>      Filter: "selection", "effectiveness", or "all"
+  --selection                  Run only selection evals
+  --effectiveness              Run only effectiveness evals
+  -m, --evaluation-model       Override evaluation model
+  -j, --judge-model            Override judge model
+  --model-provider             Override model provider
+  -f, --fixture <name>        Filter to a specific fixture
+  --judge-filter <id>         Filter to a specific judge
+  -p, --parallelism <n>       Max concurrent eval runs (default: CPU cores)
+  --no-parallelism            Run evals sequentially
+  -o, --output <path>         Write combined report JSON
+  -i, --inspect               Show session events
+  --keep-sandbox              Keep sandbox temp dirs after run
+  -y, --yes                   Skip confirmation prompts
 
-dojo list                 List discovered skills and evals
-dojo validate             Validate skills and eval files
+dojo list                     List discovered skills and evals
+dojo validate                 Validate skills and eval files
 ```
 
 Global flags:
 
 ```
---cwd <dir>               Working directory for config and skill discovery
---skills-dir <dir>        Override skills directory (repeatable)
---evaluator-model <model> Override evaluator model
---model-provider <provider> Override model provider
+-s, --skills-dir <dir>    Override skills directory (repeatable)
+-c, --config <path>       Path to config file (default: auto-detect dojo.toml)
+-d, --cwd <dir>           Working directory for config and skill discovery
 ```
 
 ## Eval Schema
@@ -189,13 +242,12 @@ Optional `dojo.toml` in the working directory. Everything has sensible defaults.
 dir = ['skills', '.agents/skills', '.github/skills', '.claude/skills', '.codex/skills', '.gemini/skills', '.openclaw/skills', '.opencode/skills']
 
 [model]
-provider = 'copilot'
-# evaluator and judge are optional — omit to use the SDK's default model
-
-[reporting]
-per-skill = true
-consolidated = false
+provider = 'anthropic'
+# evaluator = 'claude-sonnet-4-20250514'   # optional override for eval agent model
+# judge = 'claude-sonnet-4-20250514'       # optional override for judge model
 ```
+
+The `provider` setting applies to both evaluation and judging.
 
 ## Reports
 
@@ -203,9 +255,19 @@ Reports are saved per-skill at:
 
 ```
 <skill-dir>/evals/reports/<run-id>/report.json
+<skill-dir>/evals/reports/<run-id>/effectiveness-report.json
 <skill-dir>/evals/reports/<run-id>/logs.json
 ```
 
-### Provider Architecture
+## Provider Architecture
 
-Evaluator and Judge are interfaces — not tied to any specific SDK. The Copilot SDK (`@github/copilot-sdk`) is the first implementation. New providers can be added under `src/providers/<name>/`.
+Evaluator and Judge are interfaces — not tied to any specific SDK. Four providers ship today:
+
+| Provider | Notes |
+|----------|-------|
+| `anthropic` | Default. Reads `ANTHROPIC_API_KEY`. |
+| `openai` | Reads `OPENAI_API_KEY`. |
+| `copilot` | GitHub Copilot SDK (v1.0.0-beta.4). |
+| `vercel` | Vercel AI SDK. Routes via `<provider>/<model-id>` model strings (e.g. `openai/gpt-4o-mini`). |
+
+All four implement both the `Evaluator` and `Judge` interfaces. To add a new provider, create `src/providers/<name>/evaluator.ts`, add the literal to `SUPPORTED_PROVIDERS` in `src/schemas/config.ts`, and wire the dispatch in `src/providers/factory.ts`.
