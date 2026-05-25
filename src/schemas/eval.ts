@@ -60,6 +60,7 @@ export const MatrixEntrySchema = z.object({
 
 export const CriterionSchema = z.object({
   name: z.string().min(1).max(200).describe('Name of the criterion to evaluate.'),
+  description: z.string().min(1).describe('What the judge should evaluate for this criterion.'),
   pass_threshold: z
     .number()
     .min(0)

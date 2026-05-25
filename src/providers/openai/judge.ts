@@ -1,12 +1,10 @@
-import Anthropic from '@anthropic-ai/sdk'
-import type { Tool } from '@anthropic-ai/sdk/resources/messages'
+import OpenAI from 'openai'
 import { z } from 'zod/v4'
 import { JUDGE_SYSTEM_MESSAGE } from '../shared/prompts.js'
 import type { Judge, JudgeInput, JudgeResult } from '../types.js'
 
-const DEFAULT_MODEL = 'claude-sonnet-4-5'
+const DEFAULT_MODEL = 'gpt-4o-mini'
 const SUBMIT_TOOL_NAME = 'submit_evaluation'
-const MAX_OUTPUT_TOKENS = 4096
 const MAX_TOOL_OUTPUT_LENGTH = 5000
 
 const CriterionScoreSchema = z.object({
@@ -19,37 +17,42 @@ const EvaluationSchema = z.object({
   criteria_scores: z.array(CriterionScoreSchema),
 })
 
-function buildSubmitEvaluationTool(criteriaNames: string[]): Tool {
+function buildSubmitEvaluationTool(
+  criteriaNames: string[],
+): OpenAI.Chat.Completions.ChatCompletionTool {
   return {
-    name: SUBMIT_TOOL_NAME,
-    description: 'Submit your evaluation scores for each criterion.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        criteria_scores: {
-          type: 'array',
-          description: 'One score entry per criterion.',
-          items: {
-            type: 'object',
-            properties: {
-              name: {
-                type: 'string',
-                description: `The criterion name. Must be one of: ${criteriaNames.join(', ')}`,
+    type: 'function',
+    function: {
+      name: SUBMIT_TOOL_NAME,
+      description: 'Submit your evaluation scores for each criterion.',
+      parameters: {
+        type: 'object',
+        properties: {
+          criteria_scores: {
+            type: 'array',
+            description: 'One score entry per criterion.',
+            items: {
+              type: 'object',
+              properties: {
+                name: {
+                  type: 'string',
+                  description: `The criterion name. Must be one of: ${criteriaNames.join(', ')}`,
+                },
+                score: {
+                  type: 'number',
+                  description: 'Score from 0.0 to 1.0',
+                },
+                reasoning: {
+                  type: 'string',
+                  description: 'Specific evidence from the artifact justifying this score.',
+                },
               },
-              score: {
-                type: 'number',
-                description: 'Score from 0.0 to 1.0',
-              },
-              reasoning: {
-                type: 'string',
-                description: 'Specific evidence from the artifact justifying this score.',
-              },
+              required: ['name', 'score', 'reasoning'],
             },
-            required: ['name', 'score', 'reasoning'],
           },
         },
+        required: ['criteria_scores'],
       },
-      required: ['criteria_scores'],
     },
   }
 }
@@ -109,7 +112,7 @@ function buildUserMessage(input: JudgeInput): string {
   return sections.join('\n\n')
 }
 
-export class AnthropicJudge implements Judge {
+export class OpenAIJudge implements Judge {
   private readonly model: string
 
   constructor(model?: string) {
@@ -117,46 +120,48 @@ export class AnthropicJudge implements Judge {
   }
 
   async evaluate(input: JudgeInput): Promise<JudgeResult> {
-    const client = new Anthropic()
+    const client = new OpenAI()
     const criteriaNames = input.criteria.map(c => c.name)
     const tool = buildSubmitEvaluationTool(criteriaNames)
 
-    const response = await client.messages.create({
+    const response = await client.chat.completions.create({
       model: this.model,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      system: JUDGE_SYSTEM_MESSAGE,
-      messages: [{ role: 'user', content: buildUserMessage(input) }],
+      messages: [
+        { role: 'system', content: JUDGE_SYSTEM_MESSAGE },
+        { role: 'user', content: buildUserMessage(input) },
+      ],
       tools: [tool],
-      tool_choice: { type: 'tool', name: SUBMIT_TOOL_NAME },
+      tool_choice: {
+        type: 'function',
+        function: { name: SUBMIT_TOOL_NAME },
+      },
     })
 
-    const toolUseBlock = response.content.find(
-      block => block.type === 'tool_use' && block.name === SUBMIT_TOOL_NAME,
+    const message = response.choices[0]?.message
+    const toolCall = message?.tool_calls?.find(
+      tc => 'function' in tc && tc.function.name === SUBMIT_TOOL_NAME,
     )
 
-    if (!toolUseBlock || toolUseBlock.type !== 'tool_use') {
-      throw new Error('Judge did not return a tool_use block for submit_evaluation')
+    if (!toolCall || !('function' in toolCall)) {
+      throw new Error('Judge did not return a tool call for submit_evaluation')
     }
 
-    const parsed = EvaluationSchema.parse(toolUseBlock.input)
+    const parsed = EvaluationSchema.parse(JSON.parse(toolCall.function.arguments))
 
     const expectedNames = new Set(input.criteria.map(c => c.name))
     const returnedNames = parsed.criteria_scores.map(cs => cs.name)
     const returnedSet = new Set(returnedNames)
 
-    // Check for duplicates
     if (returnedNames.length !== returnedSet.size) {
       const duplicates = returnedNames.filter((n, i) => returnedNames.indexOf(n) !== i)
       throw new Error(`Judge returned duplicate criteria: ${duplicates.join(', ')}`)
     }
 
-    // Check for missing criteria
     const missing = [...expectedNames].filter(n => !returnedSet.has(n))
     if (missing.length > 0) {
       throw new Error(`Judge did not score all criteria. Missing: ${missing.join(', ')}`)
     }
 
-    // Check for unexpected criteria
     const unexpected = [...returnedSet].filter(n => !expectedNames.has(n))
     if (unexpected.length > 0) {
       throw new Error(`Judge returned unexpected criteria: ${unexpected.join(', ')}`)

@@ -1,56 +1,40 @@
-import Anthropic from '@anthropic-ai/sdk'
-import type { Tool } from '@anthropic-ai/sdk/resources/messages'
+import { openai } from '@ai-sdk/openai'
+import { anthropic } from '@ai-sdk/anthropic'
+import { generateText, tool, type LanguageModel } from 'ai'
 import { z } from 'zod/v4'
 import { JUDGE_SYSTEM_MESSAGE } from '../shared/prompts.js'
 import type { Judge, JudgeInput, JudgeResult } from '../types.js'
 
-const DEFAULT_MODEL = 'claude-sonnet-4-5'
+const DEFAULT_MODEL = 'openai/gpt-4o-mini'
 const SUBMIT_TOOL_NAME = 'submit_evaluation'
-const MAX_OUTPUT_TOKENS = 4096
 const MAX_TOOL_OUTPUT_LENGTH = 5000
 
-const CriterionScoreSchema = z.object({
-  name: z.string(),
-  score: z.number().min(0).max(1),
-  reasoning: z.string(),
-})
-
 const EvaluationSchema = z.object({
-  criteria_scores: z.array(CriterionScoreSchema),
+  criteria_scores: z.array(
+    z.object({
+      name: z.string(),
+      score: z.number().min(0).max(1),
+      reasoning: z.string(),
+    }),
+  ),
 })
 
-function buildSubmitEvaluationTool(criteriaNames: string[]): Tool {
-  return {
-    name: SUBMIT_TOOL_NAME,
-    description: 'Submit your evaluation scores for each criterion.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        criteria_scores: {
-          type: 'array',
-          description: 'One score entry per criterion.',
-          items: {
-            type: 'object',
-            properties: {
-              name: {
-                type: 'string',
-                description: `The criterion name. Must be one of: ${criteriaNames.join(', ')}`,
-              },
-              score: {
-                type: 'number',
-                description: 'Score from 0.0 to 1.0',
-              },
-              reasoning: {
-                type: 'string',
-                description: 'Specific evidence from the artifact justifying this score.',
-              },
-            },
-            required: ['name', 'score', 'reasoning'],
-          },
-        },
-      },
-      required: ['criteria_scores'],
-    },
+function resolveModel(modelString: string): LanguageModel {
+  const separator = modelString.indexOf('/')
+  if (separator === -1) {
+    throw new Error(`Invalid model string "${modelString}". Expected format: <provider>/<model-id>`)
+  }
+
+  const providerName = modelString.slice(0, separator)
+  const modelId = modelString.slice(separator + 1)
+
+  switch (providerName) {
+    case 'openai':
+      return openai(modelId)
+    case 'anthropic':
+      return anthropic(modelId)
+    default:
+      throw new Error(`Unsupported Vercel AI SDK provider: "${providerName}"`)
   }
 }
 
@@ -109,54 +93,65 @@ function buildUserMessage(input: JudgeInput): string {
   return sections.join('\n\n')
 }
 
-export class AnthropicJudge implements Judge {
-  private readonly model: string
+export class VercelJudge implements Judge {
+  private readonly modelString: string
 
   constructor(model?: string) {
-    this.model = model ?? DEFAULT_MODEL
+    this.modelString = model ?? DEFAULT_MODEL
   }
 
   async evaluate(input: JudgeInput): Promise<JudgeResult> {
-    const client = new Anthropic()
+    const model = resolveModel(this.modelString)
     const criteriaNames = input.criteria.map(c => c.name)
-    const tool = buildSubmitEvaluationTool(criteriaNames)
 
-    const response = await client.messages.create({
-      model: this.model,
-      max_tokens: MAX_OUTPUT_TOKENS,
+    const result = await generateText({
+      model,
       system: JUDGE_SYSTEM_MESSAGE,
       messages: [{ role: 'user', content: buildUserMessage(input) }],
-      tools: [tool],
-      tool_choice: { type: 'tool', name: SUBMIT_TOOL_NAME },
+      tools: {
+        [SUBMIT_TOOL_NAME]: tool({
+          description: 'Submit your evaluation scores for each criterion.',
+          inputSchema: z.object({
+            criteria_scores: z
+              .array(
+                z.object({
+                  name: z
+                    .string()
+                    .describe(`The criterion name. Must be one of: ${criteriaNames.join(', ')}`),
+                  score: z.number().min(0).max(1).describe('Score from 0.0 to 1.0'),
+                  reasoning: z
+                    .string()
+                    .describe('Specific evidence from the artifact justifying this score.'),
+                }),
+              )
+              .describe('One score entry per criterion.'),
+          }),
+        }),
+      },
+      toolChoice: { type: 'tool', toolName: SUBMIT_TOOL_NAME },
     })
 
-    const toolUseBlock = response.content.find(
-      block => block.type === 'tool_use' && block.name === SUBMIT_TOOL_NAME,
-    )
-
-    if (!toolUseBlock || toolUseBlock.type !== 'tool_use') {
-      throw new Error('Judge did not return a tool_use block for submit_evaluation')
+    const toolCall = result.toolCalls[0]
+    if (!toolCall || toolCall.toolName !== SUBMIT_TOOL_NAME) {
+      throw new Error('Judge did not return a tool call for submit_evaluation')
     }
 
-    const parsed = EvaluationSchema.parse(toolUseBlock.input)
+    const parsed = EvaluationSchema.parse(toolCall.input)
 
     const expectedNames = new Set(input.criteria.map(c => c.name))
     const returnedNames = parsed.criteria_scores.map(cs => cs.name)
     const returnedSet = new Set(returnedNames)
 
-    // Check for duplicates
     if (returnedNames.length !== returnedSet.size) {
       const duplicates = returnedNames.filter((n, i) => returnedNames.indexOf(n) !== i)
       throw new Error(`Judge returned duplicate criteria: ${duplicates.join(', ')}`)
     }
 
-    // Check for missing criteria
     const missing = [...expectedNames].filter(n => !returnedSet.has(n))
     if (missing.length > 0) {
       throw new Error(`Judge did not score all criteria. Missing: ${missing.join(', ')}`)
     }
 
-    // Check for unexpected criteria
     const unexpected = [...returnedSet].filter(n => !expectedNames.has(n))
     if (unexpected.length > 0) {
       throw new Error(`Judge returned unexpected criteria: ${unexpected.join(', ')}`)
@@ -177,7 +172,7 @@ export class AnthropicJudge implements Judge {
     return {
       perCriterion,
       overallPassed: perCriterion.every(c => c.passed),
-      judgeModel: this.model,
+      judgeModel: this.modelString,
     }
   }
 }

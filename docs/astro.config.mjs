@@ -34,7 +34,8 @@ export default defineConfig({
           label: 'Guides',
           items: [
             { label: 'Quick Start', slug: 'guides/quick-start' },
-            { label: 'Writing Evals', slug: 'guides/writing-evals' },
+            { label: 'Selection Evals', slug: 'guides/writing-evals' },
+            { label: 'Effectiveness Evals', slug: 'guides/effectiveness-evals' },
             { label: 'Testing Variants', slug: 'guides/testing-variants' },
             { label: 'Setup', slug: 'guides/setup' },
           ],

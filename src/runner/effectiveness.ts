@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
+import { z } from 'zod/v4'
 import type { Judge, JudgeInput, EffectivenessResult } from '../providers/types.js'
 import type {
   DiscoveredEffectivenessFile,
@@ -19,6 +21,17 @@ import {
   type SandboxOptions,
 } from './sandbox/harness.js'
 
+const ArtifactSchema = z.object({
+  finalMessage: z.string(),
+  toolCalls: z.array(
+    z.object({
+      tool: z.string(),
+      input: z.unknown(),
+      output: z.unknown(),
+    }),
+  ),
+})
+
 export interface EffectivenessAgentWorkItem {
   eval_: EffectivenessEval
   fixture: DiscoveredFixture
@@ -28,7 +41,8 @@ export interface EffectivenessAgentWorkItem {
   skillDirPath: string
   timeout: number
   variantName: string
-  skillContent: string
+  /** For 'base' variant: path to SKILL.md. For other variants: inline skill content. */
+  variantSkillContent: string
 }
 
 export interface EffectivenessEvalResult {
@@ -65,6 +79,8 @@ export interface EffectivenessRunnerOptions {
   defaultTimeout?: number
   parallelism?: number
   keepSandbox?: boolean
+  /** Fallback matrix derived from global config when YAML doesn't specify one. */
+  defaultMatrix?: { evaluators: MatrixEntry[]; judges: MatrixEntry[] }
 }
 
 function formatMatrixEntry(entry: MatrixEntry): string {
@@ -96,18 +112,19 @@ function resolveVariants(eval_: EffectivenessEval, fileVariants: Variant[] | und
 function resolveMatrix(
   eval_: EffectivenessEval,
   file: EffectivenessFile,
+  defaultMatrix?: { evaluators: MatrixEntry[]; judges: MatrixEntry[] },
 ): { evaluators: MatrixEntry[]; judges: MatrixEntry[] } {
   const matrix = eval_.matrix ?? file.defaults?.matrix
   return {
-    evaluators: matrix?.evaluators ?? [],
-    judges: matrix?.judges ?? [],
+    evaluators: matrix?.evaluators ?? defaultMatrix?.evaluators ?? [],
+    judges: matrix?.judges ?? defaultMatrix?.judges ?? [],
   }
 }
 
 export function buildEffectivenessWorkItems(
   options: EffectivenessRunnerOptions,
 ): EffectivenessAgentWorkItem[] {
-  const { effectivenessFiles, fixtures, skills } = options
+  const { effectivenessFiles, fixtures, skills, defaultMatrix } = options
   const items: EffectivenessAgentWorkItem[] = []
 
   for (const { file, skillName } of effectivenessFiles) {
@@ -122,7 +139,7 @@ export function buildEffectivenessWorkItems(
     for (const eval_ of file.evals) {
       if (!eval_.enabled) continue
 
-      const { evaluators, judges } = resolveMatrix(eval_, file)
+      const { evaluators, judges } = resolveMatrix(eval_, file, defaultMatrix)
       if (evaluators.length === 0 || judges.length === 0) continue
 
       const evalFixtures =
@@ -147,7 +164,7 @@ export function buildEffectivenessWorkItems(
             skillDirPath: skill.dirPath,
             timeout,
             variantName: 'base',
-            skillContent: skillContentPath,
+            variantSkillContent: skillContentPath,
           })
 
           // Variant runs
@@ -161,7 +178,7 @@ export function buildEffectivenessWorkItems(
               skillDirPath: skill.dirPath,
               timeout,
               variantName: variant.name,
-              skillContent: variant.value,
+              variantSkillContent: variant.value,
             })
           }
         }
@@ -217,13 +234,41 @@ function spawnAgent(
   signal?: AbortSignal,
 ): Promise<EffectivenessResult> {
   return new Promise((resolve, reject) => {
-    const agentRunnerPath = path.resolve(import.meta.dirname ?? '', 'sandbox', 'agent-runner.ts')
+    const dir = import.meta.dirname ?? ''
+    const tsPath = path.resolve(dir, 'sandbox', 'agent-runner.ts')
+    const jsPath = path.resolve(dir, 'sandbox', 'agent-runner.js')
+    const bundledJsPath = path.resolve(dir, 'runner', 'sandbox', 'agent-runner.js')
+
+    let agentRunnerPath: string
+    let command: string
+    let args: string[]
+
+    if (existsSync(tsPath)) {
+      agentRunnerPath = tsPath
+      command = 'npx'
+      args = ['tsx', agentRunnerPath]
+    } else if (existsSync(jsPath)) {
+      agentRunnerPath = jsPath
+      command = 'node'
+      args = [agentRunnerPath]
+    } else if (existsSync(bundledJsPath)) {
+      agentRunnerPath = bundledJsPath
+      command = 'node'
+      args = [agentRunnerPath]
+    } else {
+      reject(new Error(`Cannot find agent-runner at ${tsPath} or ${jsPath} or ${bundledJsPath}`))
+      return
+    }
 
     const artifactPath = path.join(sandbox.workspaceDir, '.dojo-artifact.json')
 
-    const child = spawn('npx', ['tsx', agentRunnerPath], {
+    const child = spawn(command, args, {
       env: {
-        ...process.env,
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        TMPDIR: process.env.TMPDIR,
+        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+        OPENAI_API_KEY: process.env.OPENAI_API_KEY,
         DOJO_SANDBOX_DIR: sandbox.workspaceDir,
         DOJO_SKILL_DIR: sandbox.skillDir,
         DOJO_PROMPT: item.eval_.prompt,
@@ -237,16 +282,27 @@ function spawnAgent(
       signal,
     })
 
+    const killTimeout = setTimeout(
+      () => {
+        child.kill('SIGTERM')
+      },
+      item.timeout * 1000 + 5000,
+    )
+    killTimeout.unref()
+
     let stderr = ''
     child.stderr?.on('data', (chunk: Buffer) => {
       stderr += chunk.toString()
     })
+    child.stdout?.on('data', () => {})
 
     child.on('error', (err: Error) => {
+      clearTimeout(killTimeout)
       reject(err)
     })
 
     child.on('close', async (code: number | null) => {
+      clearTimeout(killTimeout)
       if (code !== 0) {
         reject(new Error(`Agent process exited with code ${code}: ${stderr}`))
         return
@@ -254,8 +310,8 @@ function spawnAgent(
 
       try {
         const raw = await readFile(artifactPath, 'utf-8')
-        const artifact = JSON.parse(raw) as EffectivenessResult
-        resolve(artifact)
+        const artifact = ArtifactSchema.parse(JSON.parse(raw))
+        resolve(artifact as EffectivenessResult)
       } catch (err) {
         reject(
           new Error(
@@ -309,7 +365,9 @@ export async function runSingleEffectivenessEval(
 
       // Resolve skill content: for 'base' variant read from disk, for variants use inline value
       const skillContent =
-        item.variantName === 'base' ? await readSkillContent(item.skillDirPath) : item.skillContent
+        item.variantName === 'base'
+          ? await readSkillContent(item.skillDirPath)
+          : item.variantSkillContent
 
       const golden = await readGoldenReference(item.fixture)
       const durationMs = performance.now() - start
@@ -341,6 +399,7 @@ export async function runSingleEffectivenessEval(
           skillContent,
           criteria: item.eval_.criteria.map(c => ({
             name: c.name,
+            description: c.description,
             threshold: c.pass_threshold,
           })),
           artifact: {
@@ -432,6 +491,8 @@ export async function runSingleEffectivenessEval(
   }
 }
 
+const CONSECUTIVE_FAILURE_ABORT_THRESHOLD = 3
+
 export async function runEffectivenessEvals(
   options: EffectivenessRunnerOptions,
 ): Promise<EffectivenessEvalResult[]> {
@@ -441,9 +502,44 @@ export async function runEffectivenessEvals(
   const results: EffectivenessEvalResult[][] = new Array(items.length)
 
   if (parallelism <= 1) {
+    let consecutiveErrors = 0
+    let lastErrorMessage: string | undefined
+
     for (let i = 0; i < items.length; i++) {
       if (signal?.aborted) break
       results[i] = await runSingleEffectivenessEval(items[i], i, totalRuns, options)
+
+      const resultErrors = results[i].filter(r => r.error)
+      if (resultErrors.length > 0 && resultErrors.length === results[i].length) {
+        const errorMsg = resultErrors[0].error
+        if (errorMsg === lastErrorMessage) {
+          consecutiveErrors++
+        } else {
+          consecutiveErrors = 1
+          lastErrorMessage = errorMsg
+        }
+
+        if (consecutiveErrors >= CONSECUTIVE_FAILURE_ABORT_THRESHOLD) {
+          for (let j = i + 1; j < items.length; j++) {
+            results[j] = items[j].judges.map(judgeEntry => ({
+              eval: items[j].eval_.name,
+              fixture: items[j].fixture.name,
+              evaluator: formatMatrixEntry(items[j].evaluator),
+              judge: formatMatrixEntry(judgeEntry),
+              variant: items[j].variantName === 'base' ? undefined : items[j].variantName,
+              skillName: items[j].skillName,
+              passed: false,
+              criteria: [],
+              durationMs: 0,
+              error: `Aborted: ${consecutiveErrors} consecutive failures with same error: ${lastErrorMessage}`,
+            }))
+          }
+          break
+        }
+      } else {
+        consecutiveErrors = 0
+        lastErrorMessage = undefined
+      }
     }
   } else {
     let nextIndex = 0

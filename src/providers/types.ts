@@ -49,6 +49,7 @@ export interface FileDiff {
 
 export interface JudgeCriterion {
   name: string
+  description: string
   threshold: number
 }
 

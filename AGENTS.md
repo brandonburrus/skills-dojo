@@ -188,12 +188,13 @@ considered, why this choice was made, and when to revisit.
 ### Decisions
 
 - **Provider abstraction over SDK lock-in:** The evaluator and judge
-  are interfaces, not tied to any single SDK. Copilot was the first
-  implementation; OpenAI Chat Completions and Anthropic Messages API
-  followed (default provider is `anthropic`). The Vercel AI SDK provider
-  adds a meta-SDK path that routes to underlying providers via a
-  `<provider>/<model-id>` model string. Revisit if the abstraction
-  becomes leaky.
+  are interfaces, not tied to any single SDK. All four providers
+  (copilot, openai, anthropic, vercel) implement both `Evaluator` and
+  `Judge` interfaces. Provider is configured once in `dojo.toml`
+  (`[model].provider`) and used for both selection evals, effectiveness
+  evals (agent-runner), and judging. The Vercel AI SDK provider routes
+  to underlying providers via a `<provider>/<model-id>` model string.
+  Revisit if the abstraction becomes leaky.
 
 - **Selection evals use tool observation:** Instead of asking the agent
   "which skill would you pick?", we register a `load_skill` tool and

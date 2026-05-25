@@ -56,8 +56,10 @@ evals:
     prompt: "Write a SQL query that joins users and orders tables on user_id"
     criteria:
       - name: correct-join-syntax
+        description: "The generated SQL uses valid JOIN syntax that would execute without errors."
         pass_threshold: 0.8
       - name: uses-explicit-join
+        description: "The query uses an explicit JOIN keyword rather than implicit comma-separated table joins."
         pass_threshold: 0.7
     fixtures:
       - basic-join
@@ -105,14 +107,16 @@ Each eval defines one or more criteria that the judge evaluates. All criteria mu
 ```yaml
 criteria:
   - name: correct-output
+    description: "The agent produces output that matches the expected result for the given input."
     pass_threshold: 0.9
   - name: no-hardcoded-values
+    description: "The solution uses variables or parameters rather than hardcoded literals."
     pass_threshold: 0.7
 ```
 
 The `pass_threshold` is a score from 0 to 1. The judge assigns a score for each criterion, and the criterion passes if the score meets or exceeds the threshold.
 
-Criterion names should be descriptive -- the judge uses them (along with golden material) to understand what to evaluate.
+The `description` tells the judge exactly what to evaluate. Be specific -- vague descriptions lead to inconsistent scoring.
 
 ## Matrix mode
 
@@ -137,6 +141,7 @@ evals:
     prompt: "..."
     criteria:
       - name: correct
+        description: "The agent produces the correct output for the given prompt."
         pass_threshold: 0.8
 ```
 
@@ -150,6 +155,7 @@ evals:
     prompt: "..."
     criteria:
       - name: correct
+        description: "The agent produces the correct output for the given prompt."
         pass_threshold: 0.9
     matrix:
       evaluators:
@@ -176,6 +182,7 @@ evals:
     prompt: "..."
     criteria:
       - name: correct
+        description: "The agent produces the correct output for the given prompt."
         pass_threshold: 0.8
     variants: all              # run against all variants (default)
 ```

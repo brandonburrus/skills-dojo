@@ -9,6 +9,7 @@ import type { DojoConfig } from '../types.js'
 export interface ConfigOverrides {
   modelProvider?: string
   evaluatorModel?: string
+  judgeModel?: string
   skillsDir?: string[]
 }
 
@@ -25,9 +26,11 @@ export interface LoadConfigResult {
 export async function loadConfig(
   startDir?: string,
   overrides?: ConfigOverrides,
+  configFile?: string,
 ): Promise<LoadConfigResult> {
   const dir = startDir ?? process.cwd()
-  const configPath = path.join(dir, CONFIG_FILENAME)
+  const configPath = configFile ?? path.join(dir, CONFIG_FILENAME)
+  const configDir = configFile ? path.dirname(path.resolve(configFile)) : dir
 
   let raw: string
   try {
@@ -36,7 +39,7 @@ export async function loadConfig(
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       return {
         config: parseConfig(applyOverrides(DEFAULT_CONFIG, overrides), configPath),
-        configDir: dir,
+        configDir,
         source: 'defaults',
       }
     }
@@ -63,7 +66,7 @@ export async function loadConfig(
   // Re-parse after CLI overrides so flag-injected values (e.g. --model-provider)
   // are validated by the same schema as values from the TOML file.
   const config = parseConfig(merged, configPath)
-  return { config, configDir: dir, source: 'file' }
+  return { config, configDir, source: 'file' }
 }
 
 function parseConfig(input: unknown, configPath: string): DojoConfig {
@@ -94,6 +97,7 @@ function applyOverrides(config: DojoConfig, overrides?: ConfigOverrides): unknow
       ...config.model,
       ...(overrides.modelProvider && { provider: overrides.modelProvider }),
       ...(overrides.evaluatorModel && { evaluator: overrides.evaluatorModel }),
+      ...(overrides.judgeModel && { judge: overrides.judgeModel }),
     },
   }
 }

@@ -40,7 +40,7 @@ describe('formatRunReport', () => {
 
     expect(output).toContain('PASS')
     expect(output).toContain('FAIL')
-    expect(output).toContain('Skill: my-skill')
+    expect(output).toContain('Skill Selection: my-skill')
   })
 
   it('shows flat table with eval names when no variants', () => {
@@ -93,6 +93,6 @@ describe('formatRunReport', () => {
 
     const output = stripAnsi(formatRunReport(report))
 
-    expect(output).toContain('Skill: my-skill')
+    expect(output).toContain('Skill Selection: my-skill')
   })
 })

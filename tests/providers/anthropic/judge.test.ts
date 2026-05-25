@@ -17,8 +17,8 @@ const makeInput = (overrides?: Partial<JudgeInput>): JudgeInput => ({
   prompt: 'Write a hello world function',
   skillContent: '# Hello World Skill',
   criteria: [
-    { name: 'correctness', threshold: 0.8 },
-    { name: 'style', threshold: 0.7 },
+    { name: 'correctness', description: 'The output produces the correct result.', threshold: 0.8 },
+    { name: 'style', description: 'The code follows idiomatic style conventions.', threshold: 0.7 },
   ],
   artifact: {
     finalMessage: 'Here is your function',
@@ -119,6 +119,44 @@ describe('AnthropicJudge', () => {
 
     expect(result.judgeModel).toBe('claude-opus-4')
     expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ model: 'claude-opus-4' }))
+  })
+
+  it('throws when judge returns incomplete criteria', async () => {
+    mockCreate.mockResolvedValue({
+      content: [
+        {
+          type: 'tool_use',
+          name: 'submit_evaluation',
+          input: {
+            criteria_scores: [{ name: 'correctness', score: 0.9, reasoning: 'Good' }],
+          },
+        },
+      ],
+    })
+
+    const judge = new AnthropicJudge()
+    await expect(judge.evaluate(makeInput())).rejects.toThrow('Missing')
+  })
+
+  it('throws when judge returns duplicate criteria', async () => {
+    mockCreate.mockResolvedValue({
+      content: [
+        {
+          type: 'tool_use',
+          name: 'submit_evaluation',
+          input: {
+            criteria_scores: [
+              { name: 'correctness', score: 0.9, reasoning: 'Good' },
+              { name: 'correctness', score: 0.8, reasoning: 'Also good' },
+              { name: 'style', score: 0.8, reasoning: 'Fine' },
+            ],
+          },
+        },
+      ],
+    })
+
+    const judge = new AnthropicJudge()
+    await expect(judge.evaluate(makeInput())).rejects.toThrow('duplicate criteria')
   })
 
   it('uses default model when none provided', async () => {

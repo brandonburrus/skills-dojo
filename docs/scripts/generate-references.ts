@@ -341,10 +341,12 @@ function renderCommandSection(cmd: CommandDef): string {
 }
 
 const globalOptions: CommandOption[] = [
-  { flags: '--skills-dir <dir>', description: 'Override skills directory (repeatable)' },
-  { flags: '--evaluator-model <model>', description: 'Override evaluator model' },
-  { flags: '--model-provider <provider>', description: 'Override model provider' },
-  { flags: '--cwd <dir>', description: 'Working directory for config and skill discovery' },
+  { flags: '-s, --skills-dir <dir>', description: 'Override skills directory (repeatable)' },
+  {
+    flags: '-c, --config <path>',
+    description: 'Path to config file (default: auto-detect dojo.toml)',
+  },
+  { flags: '-d, --cwd <dir>', description: 'Working directory for config and skill discovery' },
   { flags: '-v, --version', description: 'Output the current version' },
   { flags: '-h, --help', description: 'Display help for command' },
 ]
@@ -377,6 +379,29 @@ const commands: CommandDef[] = [
         description:
           'Show key session events (model, prompt, tool calls, errors). Full event stream is written to logs.json.',
       },
+      {
+        flags: '-t, --eval-type <type>',
+        description: 'Filter by eval type: "selection", "effectiveness", or "all"',
+        default: 'all',
+      },
+      { flags: '--selection', description: 'Run only selection evals (shortcut for -t selection)' },
+      {
+        flags: '--effectiveness',
+        description: 'Run only effectiveness evals (shortcut for -t effectiveness)',
+      },
+      { flags: '-m, --evaluation-model <model>', description: 'Override evaluation model' },
+      { flags: '-j, --judge-model <model>', description: 'Override judge model' },
+      { flags: '--model-provider <provider>', description: 'Override model provider' },
+      {
+        flags: '-f, --fixture <name>',
+        description: 'Filter effectiveness evals to a specific fixture',
+      },
+      {
+        flags: '--judge-filter <id>',
+        description: 'Filter to a specific judge (format: "provider/model")',
+      },
+      { flags: '--keep-sandbox', description: "Don't clean up sandbox temp directories after run" },
+      { flags: '-y, --yes', description: 'Skip confirmation prompts for large eval runs' },
     ],
   },
   {

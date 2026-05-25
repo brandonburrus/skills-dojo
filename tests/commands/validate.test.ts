@@ -34,7 +34,7 @@ describe('validateCommand', () => {
     const output = logSpy.mock.calls.map(c => c[0] as string).join('\n')
     expect(output).toContain('Config loaded')
     expect(output).toContain('0 skills discovered')
-    expect(output).toContain('0 evals validated')
+    expect(output).toContain('0 selection evals validated')
   })
 
   it('succeeds with defaults when no config file exists', async () => {
@@ -69,7 +69,7 @@ describe('validateCommand', () => {
     expect(process.exitCode).toBeUndefined()
     const output = logSpy.mock.calls.map(c => c[0] as string).join('\n')
     expect(output).toContain('1 skill discovered')
-    expect(output).toContain('1 eval validated')
+    expect(output).toContain('1 selection eval validated')
   })
 
   it('reports error and sets exitCode for invalid skill', async () => {

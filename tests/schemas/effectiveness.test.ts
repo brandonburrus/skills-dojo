@@ -5,7 +5,13 @@ describe('EffectivenessEvalSchema', () => {
   const validEval = {
     name: 'test-eval',
     prompt: 'Write a hello world function',
-    criteria: [{ name: 'correctness', pass_threshold: 0.8 }],
+    criteria: [
+      {
+        name: 'correctness',
+        description: 'The output produces the correct result for all inputs.',
+        pass_threshold: 0.8,
+      },
+    ],
   }
 
   it('parses valid eval with one criterion', () => {
@@ -32,7 +38,7 @@ describe('EffectivenessEvalSchema', () => {
     expect(() =>
       EffectivenessEvalSchema.parse({
         ...validEval,
-        criteria: [{ name: 'correctness', pass_threshold: 1.5 }],
+        criteria: [{ name: 'correctness', description: 'Is correct', pass_threshold: 1.5 }],
       }),
     ).toThrow()
   })
@@ -41,7 +47,7 @@ describe('EffectivenessEvalSchema', () => {
     expect(() =>
       EffectivenessEvalSchema.parse({
         ...validEval,
-        criteria: [{ name: 'correctness', pass_threshold: -0.1 }],
+        criteria: [{ name: 'correctness', description: 'Is correct', pass_threshold: -0.1 }],
       }),
     ).toThrow()
   })
@@ -50,7 +56,7 @@ describe('EffectivenessEvalSchema', () => {
     expect(() =>
       EffectivenessEvalSchema.parse({
         ...validEval,
-        criteria: [{ name: '', pass_threshold: 0.8 }],
+        criteria: [{ name: '', description: 'Is correct', pass_threshold: 0.8 }],
       }),
     ).toThrow()
   })
@@ -91,7 +97,9 @@ describe('EffectivenessFileSchema', () => {
       {
         name: 'test-eval',
         prompt: 'Write a function',
-        criteria: [{ name: 'correctness', pass_threshold: 0.7 }],
+        criteria: [
+          { name: 'correctness', description: 'The output is correct.', pass_threshold: 0.7 },
+        ],
       },
     ],
   }

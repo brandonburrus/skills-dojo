@@ -8,6 +8,16 @@ import { snapshotDir, computeFsDiff, type FileSnapshot } from './fs-diff.js'
 
 const execFileAsync = promisify(execFile)
 
+const SAFE_NAME_PATTERN = /^[a-zA-Z0-9_\-.]+$/
+
+function sanitizeName(name: string): string {
+  const normalized = name.replace(/\//g, '_')
+  if (!SAFE_NAME_PATTERN.test(normalized)) {
+    throw new Error(`Unsafe name for sandbox path: "${name}"`)
+  }
+  return normalized
+}
+
 export interface SandboxOptions {
   runId: string
   skillName: string
@@ -34,9 +44,9 @@ export async function createSandbox(options: SandboxOptions): Promise<Sandbox> {
   const baseDir = path.join(
     os.tmpdir(),
     `dojo-${options.runId}`,
-    options.skillName,
-    options.fixtureName,
-    options.evaluatorId,
+    sanitizeName(options.skillName),
+    sanitizeName(options.fixtureName),
+    sanitizeName(options.evaluatorId),
     String(options.sample),
   )
 
@@ -69,12 +79,33 @@ export async function runSetup(sandbox: Sandbox, signal?: AbortSignal): Promise<
   const { stdout, stderr } = await execFileAsync('bash', ['setup.sh'], {
     cwd: sandbox.workspaceDir,
     signal,
+    env: {
+      PATH: process.env.PATH,
+      HOME: process.env.HOME,
+      TMPDIR: process.env.TMPDIR,
+    },
   }).catch((error: unknown) => {
-    const execError = error as { stdout?: string; stderr?: string; message?: string }
-    throw new Error(`setup.sh failed:\n${execError.stdout ?? ''}\n${execError.stderr ?? ''}`.trim())
+    if (error instanceof Error && 'killed' in error && error.name === 'AbortError') {
+      throw error
+    }
+    const message = error instanceof Error ? error.message : String(error)
+    const stdout =
+      error !== null &&
+      typeof error === 'object' &&
+      'stdout' in error &&
+      typeof error.stdout === 'string'
+        ? error.stdout
+        : ''
+    const stderr =
+      error !== null &&
+      typeof error === 'object' &&
+      'stderr' in error &&
+      typeof error.stderr === 'string'
+        ? error.stderr
+        : ''
+    throw new Error(`setup.sh failed:\n${stdout}\n${stderr}\n${message}`.trim())
   })
 
-  // Avoid unused variable warnings
   void stdout
   void stderr
 
