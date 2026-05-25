@@ -114,11 +114,32 @@ function resolveMatrix(
   file: EffectivenessFile,
   defaultMatrix?: { evaluators: MatrixEntry[]; judges: MatrixEntry[] },
 ): { evaluators: MatrixEntry[]; judges: MatrixEntry[] } {
-  const matrix = eval_.matrix ?? file.defaults?.matrix
-  return {
-    evaluators: matrix?.evaluators ?? defaultMatrix?.evaluators ?? [],
-    judges: matrix?.judges ?? defaultMatrix?.judges ?? [],
+  const matrix = eval_.matrix ?? file.matrix
+
+  const evaluators = matrix?.evaluators ?? defaultMatrix?.evaluators ?? []
+  const judges = matrix?.judges ?? defaultMatrix?.judges ?? []
+
+  // Resolve file-level model shorthand into evaluators if none specified
+  const resolvedEvaluators =
+    evaluators.length === 0 && file.model ? [parseModelShorthand(file.model)] : evaluators
+
+  // Resolve file-level judge shorthand into judges if none specified
+  const resolvedJudges =
+    judges.length === 0 && file.judge ? [parseModelShorthand(file.judge)] : judges
+
+  return { evaluators: resolvedEvaluators, judges: resolvedJudges }
+}
+
+/** Parses "provider/model" shorthand into a MatrixEntry. Falls back to provider from model prefix. */
+function parseModelShorthand(shorthand: string): MatrixEntry {
+  const slashIndex = shorthand.indexOf('/')
+  if (slashIndex > 0) {
+    const provider = shorthand.slice(0, slashIndex) as MatrixEntry['provider']
+    const model = shorthand.slice(slashIndex + 1)
+    return { provider, model }
   }
+  // If no slash, treat as model name with 'openai' as default provider
+  return { provider: 'openai', model: shorthand }
 }
 
 export function buildEffectivenessWorkItems(

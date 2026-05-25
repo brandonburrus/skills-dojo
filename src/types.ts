@@ -1,5 +1,5 @@
 import type { z } from 'zod/v4'
-import type { DojoConfigSchema, SUPPORTED_PROVIDERS } from './schemas/config.js'
+import type { DojoConfigSchema } from './schemas/config.js'
 import type { RunReportSchema } from './schemas/report.js'
 import type {
   CriterionSchema,

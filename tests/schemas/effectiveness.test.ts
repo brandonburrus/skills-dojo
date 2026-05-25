@@ -114,19 +114,27 @@ describe('EffectivenessFileSchema', () => {
     expect(result.timeout).toBe(120)
   })
 
-  it('accepts full file with defaults and matrix', () => {
+  it('accepts full file with matrix and variants', () => {
     const result = EffectivenessFileSchema.parse({
       ...validFile,
-      defaults: {
-        matrix: {
-          evaluators: [{ provider: 'openai', model: 'gpt-4o' }],
-          judges: [{ provider: 'anthropic', model: 'claude-sonnet-4-5' }],
-        },
+      matrix: {
+        evaluators: [{ provider: 'openai', model: 'gpt-4o' }],
+        judges: [{ provider: 'anthropic', model: 'claude-sonnet-4-5' }],
       },
       variants: [{ name: 'concise', value: 'Short skill content' }],
     })
-    expect(result.defaults?.matrix?.evaluators).toHaveLength(1)
+    expect(result.matrix?.evaluators).toHaveLength(1)
     expect(result.variants).toHaveLength(1)
+  })
+
+  it('accepts model and judge shorthands', () => {
+    const result = EffectivenessFileSchema.parse({
+      ...validFile,
+      model: 'gpt-4.1',
+      judge: 'anthropic/claude-sonnet-4-5',
+    })
+    expect(result.model).toBe('gpt-4.1')
+    expect(result.judge).toBe('anthropic/claude-sonnet-4-5')
   })
 
   it('requires evals array', () => {

@@ -301,7 +301,7 @@ async function runWithOpenAI(
     },
   })) satisfies OpenAITool[]
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: OpenAI message types are complex unions that vary by role
   const messages: any[] = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: prompt },

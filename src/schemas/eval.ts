@@ -54,8 +54,10 @@ export const SelectionEvalSchema = z.object({
 })
 
 export const MatrixEntrySchema = z.object({
-  provider: z.enum(['copilot', 'openai', 'anthropic', 'vercel']),
-  model: z.string(),
+  provider: z
+    .enum(['copilot', 'openai', 'anthropic', 'vercel'])
+    .describe('The model provider to use.'),
+  model: z.string().describe('The model identifier (e.g. "claude-sonnet-4-6", "gpt-4o").'),
 })
 
 export const CriterionSchema = z.object({
@@ -102,13 +104,10 @@ export const EffectivenessEvalSchema = z.object({
 })
 
 export const EffectivenessFileSchema = z.object({
+  model: z.string().optional().describe('Default evaluator model for all evals in this file.'),
+  judge: z.string().optional().describe('Default judge model (format: "provider/model").'),
   timeout: z.number().positive().optional().default(120).describe('Default timeout in seconds.'),
-  defaults: z
-    .object({
-      matrix: EffectivenessMatrixSchema.optional(),
-    })
-    .optional()
-    .describe('Default settings applied to all evals.'),
+  matrix: EffectivenessMatrixSchema.optional().describe('Default matrix applied to all evals.'),
   variants: z.array(VariantSchema).optional().describe('Variant definitions available to evals.'),
   evals: z.array(EffectivenessEvalSchema).describe('List of effectiveness evals to run.'),
 })
