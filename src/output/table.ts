@@ -1,4 +1,5 @@
 import type { RunReport } from '../types.js'
+import type { EffectivenessEvalResult } from '../runner/effectiveness.js'
 import { createTable, statusLabel } from './cli.js'
 import chalk from 'chalk'
 
@@ -48,8 +49,49 @@ function formatVariantMatrix(report: RunReport): string {
 }
 
 export function formatRunReport(report: RunReport): string {
-  const header = `Skill: ${chalk.bold.blueBright(report.skill)}`
+  const header = `Skill Selection: ${chalk.bold.blueBright(report.skill)}`
   const hasVariants = report.results.some(r => r.variant !== undefined)
   const body = hasVariants ? formatVariantMatrix(report) : formatFlatReport(report)
   return `${header}\n${body}`
+}
+
+export function formatEffectivenessReport(
+  skillName: string,
+  _runId: string,
+  results: EffectivenessEvalResult[],
+): string {
+  const header = `Skill Effectiveness: ${chalk.bold.blueBright(skillName)}`
+  const table = createTable(['Eval', 'Fixture', 'Evaluator', 'Judge', 'Result'])
+
+  for (const result of results) {
+    const resultCell = result.error ? chalk.red('ERROR') : statusLabel(result.passed)
+    table.push([result.eval, result.fixture, result.evaluator, result.judge, resultCell])
+  }
+
+  const lines = [header, table.toString()]
+
+  const errored = results.filter(r => r.error)
+  const evaluated = results.filter(r => !r.error)
+  const totalCriteria = evaluated.reduce((sum, r) => sum + r.criteria.length, 0)
+  const passedCriteria = evaluated.reduce(
+    (sum, r) => sum + r.criteria.filter(c => c.passed).length,
+    0,
+  )
+
+  if (evaluated.length > 0) {
+    lines.push(`${passedCriteria}/${totalCriteria} criteria passed`)
+  }
+
+  if (errored.length > 0) {
+    lines.push('')
+    lines.push(chalk.red(`${errored.length} eval(s) failed with errors:`))
+    const uniqueErrors = [...new Set(errored.map(r => r.error!))]
+    for (const err of uniqueErrors) {
+      const count = errored.filter(r => r.error === err).length
+      const prefix = count > 1 ? `(${count}x) ` : ''
+      lines.push(chalk.red(`  ${prefix}${err}`))
+    }
+  }
+
+  return lines.join('\n')
 }

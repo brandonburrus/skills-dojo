@@ -5,7 +5,7 @@ description: Configure Dojo with dojo.toml, CLI flags, and model providers.
 
 ## Configuration
 
-Dojo works with zero configuration using sensible defaults. To customize behavior, create a `dojo.toml` in your project root:
+Dojo works out of the box with no config file. If you want to customize things, create a `dojo.toml` in your project root:
 
 ```toml
 [skills]
@@ -24,36 +24,42 @@ See the [Config Reference](/reference/config/) for the full schema.
 
 ## Global CLI flags
 
-These flags apply to all commands and override `dojo.toml` values:
+These flags work on all commands and override anything in `dojo.toml`:
 
 | Flag | Description |
 |------|-------------|
-| `--cwd <dir>` | Working directory for config and skill discovery |
-| `--skills-dir <dir>` | Override skills directory (repeatable) |
-| `--model-provider <provider>` | Override model provider |
-| `--evaluator-model <model>` | Override evaluator model |
+| `-s, --skills-dir <dir>` | Override skills directory (repeatable) |
+| `-c, --config <path>` | Path to config file (default: auto-detect dojo.toml) |
+| `-d, --cwd <dir>` | Working directory for config and skill discovery |
 
-See the [Commands Reference](/reference/commands/) for all available commands and options.
+Model-related flags (`--model-provider`, `-m`, `-j`) live on `dojo run` specifically. See the [Commands Reference](/reference/commands/) for all options.
 
-## Model provider
+## Model providers
 
-Dojo uses a model provider to power the evaluator agent that runs your evals. Four providers are supported:
+Dojo needs a model provider to run evals. Four are supported:
 
-| Provider | Literal | API Key / Auth | Default Model |
-|----------|---------|----------------|---------------|
-| Anthropic | `anthropic` | `ANTHROPIC_API_KEY` | `claude-haiku-4-5` |
-| OpenAI | `openai` | `OPENAI_API_KEY` | `gpt-4o-mini` |
-| GitHub Copilot | `copilot` | Copilot subscription + auth | SDK default |
+| Provider | Config value | Auth | Default model |
+|----------|-------------|------|---------------|
+| Anthropic | `anthropic` | `ANTHROPIC_API_KEY` env var | `claude-haiku-4-5` |
+| OpenAI | `openai` | `OPENAI_API_KEY` env var | `gpt-4o-mini` |
+| GitHub Copilot | `copilot` | Active Copilot subscription | SDK default |
 | Vercel AI SDK | `vercel` | Key for the underlying provider | `openai/gpt-4o-mini` |
 
-The default provider is **Anthropic**. Switch providers via `dojo.toml` or the `--model-provider` CLI flag.
+Anthropic is the default. Switch via `dojo.toml`:
 
 ```toml
 [model]
 provider = "anthropic"
-evaluator = "claude-haiku-4-5"
+evaluator = "claude-sonnet-4-6"
+judge = "claude-opus-4-6"
 ```
 
-For the **Vercel** provider, the model string must be in the form `<underlying-provider>/<model-id>` (e.g. `openai/gpt-4o-mini` or `anthropic/claude-haiku-4-5`). This routes through the Vercel AI SDK to the specified underlying provider.
+Or at runtime:
 
-See the [Config Reference](/reference/config/#model-fields) for the full model configuration options.
+```bash
+dojo run --model-provider anthropic -m claude-sonnet-4-6
+```
+
+For the Vercel provider, model strings use the format `<provider>/<model-id>` (e.g. `openai/gpt-4o-mini` or `anthropic/claude-sonnet-4-6`). This routes through the Vercel AI SDK to whichever underlying provider you specify.
+
+See the [Config Reference](/reference/config/#model-fields) for all model options.

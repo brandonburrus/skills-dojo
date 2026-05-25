@@ -13,10 +13,9 @@ These options are available on all commands.
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--skills-dir <dir>` | Override skills directory (repeatable) | - |
-| `--evaluator-model <model>` | Override evaluator model | - |
-| `--model-provider <provider>` | Override model provider | - |
-| `--cwd <dir>` | Working directory for config and skill discovery | - |
+| `-s, --skills-dir <dir>` | Override skills directory (repeatable) | - |
+| `-c, --config <path>` | Path to config file (default: auto-detect dojo.toml) | - |
+| `-d, --cwd <dir>` | Working directory for config and skill discovery | - |
 | `-v, --version` | Output the current version | - |
 | `-h, --help` | Display help for command | - |
 
@@ -46,6 +45,16 @@ dojo run [skill] [options]
 | `--no-parallelism` | Run evals sequentially | - |
 | `-o, --output <path>` | Write combined report to file | - |
 | `-i, --inspect` | Show key session events (model, prompt, tool calls, errors). Full event stream is written to logs.json. | - |
+| `-t, --eval-type <type>` | Filter by eval type: "selection", "effectiveness", or "all" | all |
+| `--selection` | Run only selection evals (shortcut for -t selection) | - |
+| `--effectiveness` | Run only effectiveness evals (shortcut for -t effectiveness) | - |
+| `-m, --evaluation-model <model>` | Override evaluation model | - |
+| `-j, --judge-model <model>` | Override judge model | - |
+| `--model-provider <provider>` | Override model provider | - |
+| `-f, --fixture <name>` | Filter effectiveness evals to a specific fixture | - |
+| `--judge-filter <id>` | Filter to a specific judge (format: "provider/model") | - |
+| `--keep-sandbox` | Don't clean up sandbox temp directories after run | - |
+| `-y, --yes` | Skip confirmation prompts for large eval runs | - |
 ### `dojo list` (alias: `ls`)
 
 List all discovered skills and evals in a tabular format.

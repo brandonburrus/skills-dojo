@@ -79,11 +79,27 @@ export class CopilotEvaluator implements Evaluator {
 
       sessionRef = session
 
-      if (onEvent) {
-        session.on(event => {
-          onEvent(event as { type: string; [key: string]: unknown })
-        })
-      }
+      let modelSwitchError: Error | null = null
+
+      session.on(event => {
+        if (
+          event.type === 'session.model_change' &&
+          options.model &&
+          'data' in event &&
+          event.data !== null &&
+          typeof event.data === 'object'
+        ) {
+          const data = event.data as { newModel?: string }
+          if (data.newModel && data.newModel !== options.model) {
+            modelSwitchError = new Error(
+              `Copilot switched model from requested "${options.model}" to "${data.newModel}". ` +
+                'Aborting eval — model mismatch invalidates results.',
+            )
+            void session.abort()
+          }
+        }
+        onEvent?.(event as unknown as { type: string; [key: string]: unknown })
+      })
 
       const onAbort = (): void => {
         void session.abort()
@@ -106,7 +122,15 @@ export class CopilotEvaluator implements Evaluator {
           if (capture.skillName !== null) {
             return { loaded: true, skillName: capture.skillName, raw: '' }
           }
+          // If model switch caused the abort, surface that error
+          if (modelSwitchError) {
+            throw modelSwitchError
+          }
           throw err
+        }
+
+        if (modelSwitchError) {
+          throw modelSwitchError
         }
 
         if (capture.skillName !== null) {

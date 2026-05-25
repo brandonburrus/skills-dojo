@@ -1,2 +1,5 @@
 [skills]
 dir = "test-skills"
+
+[model]
+provider = "copilot"

@@ -1,0 +1,16 @@
+evals:
+  - name: aggregate-monthly-revenue
+    prompt: "Write a PostgreSQL query that calculates total revenue per month from the orders table. The orders table has columns: id, customer_id, amount (numeric), and created_at (timestamp). Output columns should be month and total_revenue, ordered by month ascending."
+    criteria:
+      - name: correct-aggregation
+        description: "The query uses SUM(amount) grouped by month extracted from created_at, producing accurate monthly totals."
+        pass_threshold: 0.8
+      - name: correct-date-truncation
+        description: "The query uses date_trunc('month', created_at) or equivalent to extract the month, not just EXTRACT(MONTH ...) which loses the year."
+        pass_threshold: 0.8
+      - name: proper-ordering
+        description: "Results are ordered by month ascending so output is chronological."
+        pass_threshold: 0.9
+      - name: valid-postgresql-syntax
+        description: "The query uses valid PostgreSQL syntax that would execute without errors on a standard PostgreSQL 15+ database."
+        pass_threshold: 0.9

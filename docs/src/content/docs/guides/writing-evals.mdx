@@ -1,5 +1,5 @@
 ---
-title: Writing Evals
+title: Selection Evals
 description: Define selection evals to test whether an agent picks the right skill for a given prompt.
 ---
 
@@ -27,7 +27,7 @@ A selection eval file has file-level defaults and an array of individual evals:
 
 ```yaml
 # File-level defaults (apply to all evals unless overridden)
-model: gpt-4o              # optional -- evaluator model
+model: claude-sonnet-4-6              # optional -- evaluator model
 timeout: 30                # seconds, default: 30
 skills: all                # which skills to include: "all" or a list of names
 run-mode: all              # "all" | "variants-only" | "current-only"

@@ -12,6 +12,11 @@ const { z } = require('zod/v4') as typeof import('zod/v4')
 import {
   SelectionFileSchema,
   SelectionEvalSchema,
+  EffectivenessFileSchema,
+  EffectivenessEvalSchema,
+  CriterionSchema,
+  EffectivenessMatrixSchema,
+  MatrixEntrySchema,
   DecoySchema,
   VariantSchema,
 } from '../../src/schemas/eval.js'
@@ -104,14 +109,14 @@ function jsonSchemaTypeToString(prop: Record<string, unknown>): string {
 }
 
 function extractFields(jsonSchema: Record<string, unknown>): FieldRow[] {
-  const properties = (jsonSchema['properties'] ?? {}) as Record<string, Record<string, unknown>>
-  const required = new Set((jsonSchema['required'] ?? []) as string[])
+  const properties = (jsonSchema.properties ?? {}) as Record<string, Record<string, unknown>>
+  const required = new Set((jsonSchema.required ?? []) as string[])
   const rows: FieldRow[] = []
 
   for (const [key, prop] of Object.entries(properties)) {
-    const description = (prop['description'] as string) ?? ''
+    const description = (prop.description as string) ?? ''
     const hasDefault = 'default' in prop
-    const defaultVal = hasDefault ? `\`${JSON.stringify(prop['default'])}\`` : '-'
+    const defaultVal = hasDefault ? `\`${JSON.stringify(prop.default)}\`` : '-'
 
     rows.push({
       field: `\`${key}\``,
@@ -158,14 +163,14 @@ function renderSchemaSection(section: SchemaSection): string {
   parts.push(renderTable(fields))
 
   // Render nested object properties as subsections
-  const properties = (jsonSchema['properties'] ?? {}) as Record<string, Record<string, unknown>>
+  const properties = (jsonSchema.properties ?? {}) as Record<string, Record<string, unknown>>
   for (const [key, prop] of Object.entries(properties)) {
     const resolvedProp = resolveNestedObject(prop)
     if (
       resolvedProp &&
       typeof resolvedProp === 'object' &&
-      resolvedProp['type'] === 'object' &&
-      resolvedProp['properties']
+      resolvedProp.type === 'object' &&
+      resolvedProp.properties
     ) {
       const nestedFields = extractFields(resolvedProp as Record<string, unknown>)
       if (nestedFields.length > 0) {
@@ -179,12 +184,12 @@ function renderSchemaSection(section: SchemaSection): string {
 
 /** Resolve a property that may be wrapped in anyOf (from .optional().default()) to find its object shape. */
 function resolveNestedObject(prop: Record<string, unknown>): Record<string, unknown> | null {
-  if (prop['type'] === 'object' && prop['properties']) {
+  if (prop.type === 'object' && prop.properties) {
     return prop
   }
-  if (Array.isArray(prop['anyOf'])) {
-    for (const variant of prop['anyOf'] as Record<string, unknown>[]) {
-      if (variant['type'] === 'object' && variant['properties']) {
+  if (Array.isArray(prop.anyOf)) {
+    for (const variant of prop.anyOf as Record<string, unknown>[]) {
+      if (variant.type === 'object' && variant.properties) {
         return variant
       }
     }
@@ -219,32 +224,84 @@ function writePage(
 registerObjectName(VariantSchema, 'Variant')
 registerObjectName(DecoySchema, 'Decoy')
 registerObjectName(SelectionEvalSchema, 'SelectionEval')
+registerObjectName(EffectivenessEvalSchema, 'EffectivenessEval')
+registerObjectName(CriterionSchema, 'Criterion')
+registerObjectName(MatrixEntrySchema, 'MatrixEntry')
+registerObjectName(EffectivenessMatrixSchema, 'Matrix')
 
-// --- Generate evals.md ---
+// --- Generate selection-evals.md ---
 
-const evalsBody = [
+const selectionEvalsBody = [
   '## Selection File',
   '',
   renderSchemaSection({
     schema: SelectionFileSchema,
-    description: 'Top-level schema for selection eval YAML files.',
+    description: 'Top-level schema for `selection.yaml` files.',
   }),
   '',
   '## Selection Eval',
   '',
   renderSchemaSection({
     schema: SelectionEvalSchema,
-    description: 'Schema for individual eval entries within the `evals` array.',
+    description: "Schema for individual entries in a selection file's `evals` array.",
   }),
 ].join('\n')
 
 writePage(
-  'evals.md',
+  'selection-evals.md',
   {
-    title: 'Eval File Reference',
+    title: 'Selection Evals Reference',
     description: 'Reference for the selection eval YAML file format.',
   },
-  evalsBody,
+  selectionEvalsBody,
+)
+
+// --- Generate effectiveness-evals.md ---
+
+const effectivenessEvalsBody = [
+  '## Effectiveness File',
+  '',
+  renderSchemaSection({
+    schema: EffectivenessFileSchema,
+    description: 'Top-level schema for `effectiveness.yaml` files.',
+  }),
+  '',
+  '## Effectiveness Eval',
+  '',
+  renderSchemaSection({
+    schema: EffectivenessEvalSchema,
+    description: "Schema for individual entries in an effectiveness file's `evals` array.",
+  }),
+  '',
+  '## Criterion',
+  '',
+  renderSchemaSection({
+    schema: CriterionSchema,
+    description: 'Schema for judging criteria in effectiveness evals.',
+  }),
+  '',
+  '## Matrix',
+  '',
+  renderSchemaSection({
+    schema: EffectivenessMatrixSchema,
+    description: 'Configuration for running evals across multiple models.',
+  }),
+  '',
+  '## Matrix Entry',
+  '',
+  renderSchemaSection({
+    schema: MatrixEntrySchema,
+    description: 'A provider/model pair used in matrix configuration.',
+  }),
+].join('\n')
+
+writePage(
+  'effectiveness-evals.md',
+  {
+    title: 'Effectiveness Evals Reference',
+    description: 'Reference for the effectiveness eval YAML file format.',
+  },
+  effectivenessEvalsBody,
 )
 
 // --- Generate variants.md ---
@@ -341,10 +398,12 @@ function renderCommandSection(cmd: CommandDef): string {
 }
 
 const globalOptions: CommandOption[] = [
-  { flags: '--skills-dir <dir>', description: 'Override skills directory (repeatable)' },
-  { flags: '--evaluator-model <model>', description: 'Override evaluator model' },
-  { flags: '--model-provider <provider>', description: 'Override model provider' },
-  { flags: '--cwd <dir>', description: 'Working directory for config and skill discovery' },
+  { flags: '-s, --skills-dir <dir>', description: 'Override skills directory (repeatable)' },
+  {
+    flags: '-c, --config <path>',
+    description: 'Path to config file (default: auto-detect dojo.toml)',
+  },
+  { flags: '-d, --cwd <dir>', description: 'Working directory for config and skill discovery' },
   { flags: '-v, --version', description: 'Output the current version' },
   { flags: '-h, --help', description: 'Display help for command' },
 ]
@@ -377,6 +436,29 @@ const commands: CommandDef[] = [
         description:
           'Show key session events (model, prompt, tool calls, errors). Full event stream is written to logs.json.',
       },
+      {
+        flags: '-t, --eval-type <type>',
+        description: 'Filter by eval type: "selection", "effectiveness", or "all"',
+        default: 'all',
+      },
+      { flags: '--selection', description: 'Run only selection evals (shortcut for -t selection)' },
+      {
+        flags: '--effectiveness',
+        description: 'Run only effectiveness evals (shortcut for -t effectiveness)',
+      },
+      { flags: '-m, --evaluation-model <model>', description: 'Override evaluation model' },
+      { flags: '-j, --judge-model <model>', description: 'Override judge model' },
+      { flags: '--model-provider <provider>', description: 'Override model provider' },
+      {
+        flags: '-f, --fixture <name>',
+        description: 'Filter effectiveness evals to a specific fixture',
+      },
+      {
+        flags: '--judge-filter <id>',
+        description: 'Filter to a specific judge (format: "provider/model")',
+      },
+      { flags: '--keep-sandbox', description: "Don't clean up sandbox temp directories after run" },
+      { flags: '-y, --yes', description: 'Skip confirmation prompts for large eval runs' },
     ],
   },
   {

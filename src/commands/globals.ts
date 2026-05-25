@@ -4,14 +4,14 @@ import type { GlobalOptions } from '../types.js'
 
 export function getGlobalOptions(cmd: Command): {
   startDir?: string
+  configFile?: string
   overrides: ConfigOverrides
 } {
   const opts = cmd.optsWithGlobals<GlobalOptions>()
   return {
     startDir: opts.cwd,
+    configFile: opts.config,
     overrides: {
-      modelProvider: opts.modelProvider,
-      evaluatorModel: opts.evaluatorModel,
       skillsDir: opts.skillsDir?.length ? opts.skillsDir : undefined,
     },
   }
