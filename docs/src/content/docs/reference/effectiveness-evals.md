@@ -18,6 +18,7 @@ Top-level schema for `effectiveness.yaml` files.
 | `timeout` | `number` | No | `120` | Default timeout in seconds. |
 | `matrix` | `Matrix` | No | - | Default matrix applied to all evals. |
 | `variants` | `Variant[]` | No | - | Variant definitions available to evals. |
+| `run-mode` | `"all"` \| `"variants-only"` \| `"current-only"` | No | `"all"` | Default run mode for evals. |
 | `evals` | `EffectivenessEval[]` | Yes | - | List of effectiveness evals to run. |
 
 #### `matrix` fields
@@ -40,6 +41,7 @@ Schema for individual entries in an effectiveness file's `evals` array.
 | `fixtures` | `string[]` | No | - | Fixture names to run against. Default: all fixtures. |
 | `criteria` | `Criterion[]` | Yes | - | Criteria the judge evaluates. All must pass. |
 | `variants` | `"all"` \| `string[]` \| `Variant[]` | No | `"all"` | Variants to run. |
+| `run-mode` | `"all"` \| `"variants-only"` \| `"current-only"` | No | - | Override run mode for this eval. |
 | `matrix` | `Matrix` | No | - | Override the matrix for this eval. |
 
 #### `matrix` fields
