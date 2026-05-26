@@ -159,7 +159,34 @@ evals:
 
 ## Variants
 
-Effectiveness evals support variants just like selection evals. Variants let you test different versions of your SKILL.md to see which produces better agent output.
+Effectiveness evals support variants to test different versions of your skill. There are two approaches: inline variants (quick, description-only) and filesystem variants (full skill directories).
+
+### Filesystem variants
+
+Place full agentskills.io skill directories under `evals/variants/`:
+
+```
+evals/
+  variants/
+    verbose-guide/
+      SKILL.md
+      scripts/
+        lint-sql.sh
+      references/
+        style-guide.md
+    minimal/
+      SKILL.md
+  fixtures/
+    basic-join/
+      tests/
+        schema.sql
+```
+
+Each variant directory must contain a `SKILL.md`. It can also include `scripts/`, `references/`, and `assets/` -- the full progressive disclosure model. The directory name is the variant's identifier.
+
+### Inline variants
+
+For quick tests where only the SKILL.md content differs, define variants inline:
 
 ```yaml
 variants:
@@ -179,12 +206,49 @@ evals:
     variants: all              # run against all variants (default)
 ```
 
-You can also restrict to specific variants:
+Inline variants cannot carry scripts, references, or assets. Use filesystem variants when you need the full skill directory.
+
+### Coexistence and collision
+
+Inline and filesystem variants can coexist. If both define a variant with the same name, the filesystem variant wins and a warning is emitted.
+
+### Restricting variants per eval
+
+You can restrict to specific variants:
 
 ```yaml
     variants:
       - detailed-examples
 ```
+
+### Run mode
+
+The `run-mode` field controls which runs execute:
+
+| Mode | Runs `[current]` | Runs variants | Use case |
+|------|-------------------|---------------|----------|
+| `all` (default) | Yes | Yes | Full coverage |
+| `current-only` | Yes | No | Quick baseline check |
+| `variants-only` | No | Yes | Focus on variant comparison |
+
+Set at file level or per-eval (per-eval wins):
+
+```yaml
+run-mode: variants-only
+
+evals:
+  - name: my-eval
+    prompt: "..."
+    run-mode: all   # override
+    criteria:
+      - name: correct
+        description: "Correct output"
+        pass_threshold: 0.8
+```
+
+### Variant validation
+
+Invalid variant `SKILL.md` files emit a warning and are skipped -- they do not fail the run. This supports iterative development of new variants alongside stable ones.
 
 ## Runtime filtering
 
@@ -196,6 +260,12 @@ dojo run --eval-type effectiveness
 
 # Run a specific fixture
 dojo run --fixture basic-join
+
+# Run a specific variant
+dojo run --variant verbose-guide
+
+# Run only the baseline (no variants)
+dojo run --variant current
 
 # Run with a specific judge
 dojo run --judge-filter anthropic/claude-opus-4-6

@@ -1,6 +1,6 @@
 ---
 title: Testing Variants
-description: Use variants to test whether an agent selects a skill even when its description changes.
+description: Use variants to test skill selection robustness and effectiveness across different skill formulations.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -153,8 +153,8 @@ Run a specific variant without editing YAML:
 # Run only the "concise" variant
 dojo run --variant concise
 
-# Run only the base (current) description
-dojo run --variant base
+# Run only the current (baseline) description
+dojo run --variant current
 
 # Combine with skill and eval filters
 dojo run sql-queries --eval basic-select --variant concise
@@ -163,5 +163,88 @@ dojo run sql-queries --eval basic-select --variant concise
 Variant filters support glob patterns.
 
 <Aside type="tip">
-  The `[current]` run uses the variant name `base` internally. Use `--variant base` to run only the current skill description without any variants.
+  The `[current]` run uses the variant name `current` internally. Use `--variant current` to run only the baseline skill description without any variants.
 </Aside>
+
+## Effectiveness variants
+
+Selection variants test different *descriptions* of a skill. Effectiveness variants test different *formulations* of the entire skill -- including scripts, references, and assets.
+
+### Filesystem variants
+
+Place full agentskills.io skill directories under `evals/variants/`:
+
+```
+skills/
+  sql-queries/
+    SKILL.md
+    evals/
+      effectiveness.yaml
+      variants/
+        verbose-guide/
+          SKILL.md
+          scripts/
+            lint-sql.sh
+          references/
+            style-guide.md
+        minimal/
+          SKILL.md
+      fixtures/
+        basic-join/
+          tests/
+            schema.sql
+```
+
+Each variant directory must contain a `SKILL.md` at minimum. It can also include `scripts/`, `references/`, and `assets/` -- the full agentskills.io progressive disclosure model.
+
+### Referencing effectiveness variants
+
+In `effectiveness.yaml`, reference variants by directory name:
+
+```yaml
+evals:
+  - name: basic-join
+    prompt: "Write a SQL query joining users and orders"
+    criteria:
+      - name: correct
+        description: "Valid JOIN syntax"
+        pass_threshold: 0.8
+    variants:
+      - verbose-guide
+      - minimal
+```
+
+Use `variants: "all"` (the default) to run against every discovered variant.
+
+### Inline and filesystem coexistence
+
+Inline variants (defined with a `value` field in YAML) and filesystem variants can coexist. If both define a variant with the same name, the filesystem variant wins and a warning is emitted.
+
+### Variant validation
+
+Invalid variant `SKILL.md` files (malformed frontmatter, missing required fields) emit a warning and are skipped. They do not fail the run. This supports iterative development -- you can have work-in-progress variants alongside production ones.
+
+### Run modes for effectiveness variants
+
+The `run-mode` field controls which runs execute:
+
+| Mode | Runs `[current]` | Runs variants | Use case |
+|------|-------------------|---------------|----------|
+| `all` (default) | Yes | Yes | Full coverage |
+| `current-only` | Yes | No | Quick baseline check |
+| `variants-only` | No | Yes | Focus on variant comparison |
+
+Set at file level or per-eval in `effectiveness.yaml`:
+
+```yaml
+run-mode: variants-only
+
+evals:
+  - name: basic-join
+    prompt: "Write a JOIN query"
+    run-mode: all   # override file-level default
+    criteria:
+      - name: correct
+        description: "Valid JOIN syntax"
+        pass_threshold: 0.8
+```
